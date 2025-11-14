@@ -1,0 +1,10 @@
+hfutils
+huggingface_hub<1
+hbutils
+numpy
+pandas
+duckdb
+requests
+tqdm
+openai
+
