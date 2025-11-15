@@ -485,7 +485,7 @@ def ask_llm_for_hf_repo_info(repo_id: str, repo_type: RepoTypeTyping = 'dataset'
                     }
                 ]
             )
-            return json.loads(text)
+            return parse_json_from_llm_output(text)
         except:
             cnt += 1
             if cnt > max_retries:
