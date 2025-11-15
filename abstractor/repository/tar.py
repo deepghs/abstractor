@@ -18,7 +18,7 @@ def sample_from_tar(repo_id: str, filename: str, repo_type: RepoTypeTyping = 'da
         revision=revision,
     )
     logging.info(f'Sampling parquet file {fs_path!r} ...')
-    url = hf_get_resource_url(
+    url, content_size = hf_get_resource_url(
         repo_id=repo_id,
         repo_type=repo_type,
         filename=filename,
@@ -52,6 +52,6 @@ def sample_from_tar(repo_id: str, filename: str, repo_type: RepoTypeTyping = 'da
         return {
             "files": files,
             "total_files": len(files),
-            "total_size": total_size,
+            "total_size": content_size,
             "truncated": len(files) >= max_files,
         }
