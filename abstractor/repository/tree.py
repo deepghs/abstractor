@@ -423,7 +423,7 @@ def ask_llm_for_hf_repo_info(repo_id: str, repo_type: RepoTypeTyping = 'dataset'
                         "role": "user",
                         "content": sf.getvalue(),
                     }
-                ]))
+                ], model_name='deepseek-chat'))
                 break
             except:
                 cnt += 1
@@ -484,7 +484,8 @@ def ask_llm_for_hf_repo_info(repo_id: str, repo_type: RepoTypeTyping = 'dataset'
                         "role": "user",
                         "content": prompt,
                     }
-                ]
+                ],
+                model_name='deepseek-reasoner',
             )
             return {
                 **parse_json_from_llm_output(text),
