@@ -290,6 +290,7 @@ For a repository with README.md, config files, and numbered data batches, you mi
 3. Select representative samples from each major data category
 4. Avoid selecting multiple files that appear to be sequential/similar batches
 5. Ensure selected files together provide comprehensive repository understanding
+6. Return ONLY the JSON object, no additional text or explanation
 """
 
 _SYSTEM_PROMPT = f"""
@@ -324,9 +325,9 @@ Analyze the provided Hugging Face repository information and return a JSON objec
 **repo_type**: Determine if this is a "model", "dataset", or "space" repository.
 
 **task_types**: 
-- For model repositories: Identify the specific ML tasks this model can perform
-- For dataset repositories: Identify ALL possible ML tasks this dataset can be used for
-- For space repositories: Identify the tasks demonstrated or supported
+- For model repositories: Identify the specific ML tasks this model can perform, must be accurate, do not contain those task types not quite sure enough due to the given information 
+- For dataset repositories: Identify ALL possible ML tasks this dataset can be used for, you need to analyze and make your own judgment, not do not contain those impossible ones (e.g. for datasets without mask plz do not given me image-segmentation)
+- For space repositories: Identify the tasks demonstrated or supported, must be accurate
 - Available options include: {", ".join(_TASK_TYPES)}, and others as appropriate.
 
 **libraries**: 
