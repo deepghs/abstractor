@@ -167,7 +167,7 @@ def sample_from_json(repo_id: str, filename: str, repo_type: RepoTypeTyping = 'd
     )
 
     fs = HTTPFileSystem()
-    if content_size <= 20 * 1024 ** 2:
+    if content_size <= 5 * 1024 ** 1:
         with fs.open(url, mode="rb") as f:
             meta_info = json.load(f)
 
