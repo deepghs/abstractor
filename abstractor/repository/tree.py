@@ -8,7 +8,7 @@ from functools import partial
 from pprint import pformat
 from typing import Optional, Union, List
 
-from hbutils.string import format_tree
+from hbutils.string import format_tree, plural_word
 from hfutils.entry.tree import TreeItem
 from hfutils.operate.base import RepoTypeTyping, list_files_in_repository, get_hf_client
 from hfutils.utils import hf_normpath, get_file_type, hf_fs_path, FileItemType
@@ -22,6 +22,7 @@ from .jsonl import sample_from_jsonl
 from .parquet import sample_from_parquet
 from .tar import sample_from_tar
 from ..openai import ask_llm
+from ..utils import parse_json_from_llm_output
 
 
 def _get_sample_fn(filename):
@@ -255,6 +256,43 @@ ML_FRAMEWORKS: List[str] = [
     'animetimm',
 ]
 
+_PICK_SYSTEM_PROMPT = """
+You are a repository content sampling specialist. Your task is to analyze a given Hugging Face repository directory tree and intelligently select the most informative files for content analysis.
+
+**OBJECTIVE:**
+Given a repository path tree, select up to 8 files that would provide the best understanding of what the repository contains and its purpose. Prioritize efficiency - select fewer files if they provide sufficient information.
+
+**SELECTION CRITERIA (in order of priority):**
+1. **Documentation files**: README.md, documentation, guides
+2. **Metadata/Configuration**: meta.json, config files, dataset cards
+3. **Sample data files**: Representative examples from different data categories
+4. **Code files**: Python scripts, processing code
+5. **Schema/Structure files**: Files that reveal data structure and format
+
+**CONSTRAINTS:**
+- Maximum 8 files total
+- Only select files with these extensions: .md, .py, .parquet, .csv, .tsv, .json, .jsonl, .tar
+- Files must be downloadable via hf_hub_download (use exact repository paths)
+- Avoid redundant content - if files appear to contain similar information based on naming patterns, sample only representative examples
+- Prioritize smaller, more informative files over large data archives when possible
+
+**OUTPUT FORMAT:**
+Return a JSON array of strings, where each string is the exact file path as it appears in the repository tree.
+
+**EXAMPLE:**
+For a repository with README.md, config files, and numbered data batches, you might select:
+```json
+["README.md", "meta.json", "tables/page-1.parquet", "images/0/001.json"]
+```
+
+**ANALYSIS APPROACH:**
+1. First identify documentation and metadata files
+2. Analyze the directory structure to understand data organization
+3. Select representative samples from each major data category
+4. Avoid selecting multiple files that appear to be sequential/similar batches
+5. Ensure selected files together provide comprehensive repository understanding
+"""
+
 _SYSTEM_PROMPT = f"""
 You are an expert AI assistant specialized in analyzing Hugging Face repositories. Your task is to analyze repository information (including README files, data samples, and metadata) and extract structured information in JSON format.
 
@@ -312,8 +350,36 @@ Analyze the provided Hugging Face repository information and return a JSON objec
 """
 
 
-def get_repository_prompt(repo_id: str, repo_type: RepoTypeTyping = 'dataset', revision: str = 'main',
-                          hf_token: Optional[str] = None, max_items: Optional[int] = 4):
+def _tree_simple(tree: TreeItem):
+    children = []
+    child_cnt, child_cnt_added = 0, 0
+    for item in tree.children:
+        if item.type_ == FileItemType.FOLDER:
+            children.append(_tree_simple(item))
+        else:
+            if child_cnt < 10:
+                children.append(item)
+                child_cnt_added += 1
+            child_cnt += 1
+
+    if child_cnt > child_cnt_added:
+        children.append(TreeItem(
+            name=f'... {plural_word(child_cnt, "file")} in total ...',
+            type_=FileItemType.FILE,
+            children=[],
+            exist=True,
+        ))
+
+    return TreeItem(
+        name=tree.name,
+        type_=tree.type_,
+        children=children,
+        exist=tree.exist,
+    )
+
+
+def ask_llm_for_hf_repo_info(repo_id: str, repo_type: RepoTypeTyping = 'dataset', revision: str = 'main',
+                             hf_token: Optional[str] = None, max_items: Optional[int] = 4, max_retries: int = 5):
     tree_root = _get_tree(
         repo_id=repo_id,
         repo_type=repo_type,
@@ -323,76 +389,78 @@ def get_repository_prompt(repo_id: str, repo_type: RepoTypeTyping = 'dataset', r
     )
 
     with io.StringIO() as sf:
+        print(f'Repo ID: {repo_id}', file=sf)
+        print(f'Repo Type: {repo_type}', file=sf)
+        print(f'', file=sf)
         print(f'# Directory Tree', file=sf)
         print(f'', file=sf)
         print(f'This is the directory tree of this repository:', file=sf)
         print(format_tree(
-            tree_root,
+            _tree_simple(tree_root),
             format_node=TreeItem.get_name,
             get_children=TreeItem.get_children,
         ), file=sf)
         print(f'', file=sf)
+
+        cnt = 0
+        while cnt < max_retries:
+            try:
+                expected_filenames = parse_json_from_llm_output(ask_llm([
+                    {
+                        "role": "system",
+                        "content": _PICK_SYSTEM_PROMPT,
+                    },
+                    {
+                        "role": "user",
+                        "content": sf.getvalue(),
+                    }
+                ]))
+                break
+            except:
+                cnt += 1
+                if cnt > max_retries:
+                    raise
+                logging.exception(f'Error on parsing ({cnt}/{max_retries}) ...')
+
+        logging.info(f'Expected filename: {expected_filenames!r}')
 
         print(f'# Sample Files', file=sf)
         print(f'', file=sf)
         print(f'These are some samples from the data files', file=sf)
         print(f'', file=sf)
 
-        def _recursive(tree: TreeItem, filename: str):
-            cnt = 0
-            for item in tree.children:
-                fn = hf_normpath(os.path.join(filename, item.name))
-                if item.type_ == FileItemType.FOLDER:
-                    _recursive(tree=item, filename=fn)
-                else:
-                    if max_items is not None and cnt >= max_items:
-                        continue
+        for fn in expected_filenames:
+            if fn.lower().endswith('.md') or fn.lower().endswith('.py'):
+                logging.info(f'Loading text file {fn!r} ...')
+                print(f'## {fn}', file=sf)
+                print(f'', file=sf)
+                print(pathlib.Path(hf_hub_download(
+                    repo_id=repo_id,
+                    repo_type=repo_type,
+                    filename=fn, revision=revision,
+                    token=hf_token,
+                )).read_text(), file=sf)
+                print(f'', file=sf)
+            else:
+                _sfn = _get_sample_fn(fn)
+                if _sfn is None:
+                    continue
 
-                    if fn.lower().endswith('.md') or fn.lower().endswith('.py'):
-                        logging.info(f'Loading text file {fn!r} ...')
-                        print(f'## {fn}', file=sf)
-                        print(f'', file=sf)
-                        print(pathlib.Path(hf_hub_download(
-                            repo_id=repo_id,
-                            repo_type=repo_type,
-                            filename=fn, revision=revision,
-                            token=hf_token,
-                        )).read_text(), file=sf)
-                        print(f'', file=sf)
-                        cnt += 1
-                    else:
-                        _sfn = _get_sample_fn(fn)
-                        if _sfn is None:
-                            continue
+                print(f'## {fn}', file=sf)
+                print(f'', file=sf)
+                print(pformat(_sfn(
+                    repo_id=repo_id,
+                    repo_type=repo_type,
+                    filename=fn,
+                    revision=revision,
+                    hf_token=hf_token,
+                )), file=sf)
+                print(f'', file=sf)
 
-                        print(f'## {fn}', file=sf)
-                        print(f'', file=sf)
-                        print(pformat(_sfn(
-                            repo_id=repo_id,
-                            repo_type=repo_type,
-                            filename=fn,
-                            revision=revision,
-                            hf_token=hf_token,
-                        )), file=sf)
-                        print(f'', file=sf)
-                        cnt += 1
-
-        _recursive(tree_root, filename='.')
-
-        return sf.getvalue()
-
-
-def ask_llm_for_hf_repo_info(repo_id: str, repo_type: RepoTypeTyping = 'dataset', revision: str = 'main',
-                             hf_token: Optional[str] = None):
-    prompt = get_repository_prompt(
-        repo_id=repo_id,
-        repo_type=repo_type,
-        revision=revision,
-        hf_token=hf_token
-    )
+        prompt = sf.getvalue()
 
     cnt = 0
-    while cnt < 5:
+    while cnt < max_retries:
         try:
             text = ask_llm(
                 prompts=[
@@ -409,6 +477,6 @@ def ask_llm_for_hf_repo_info(repo_id: str, repo_type: RepoTypeTyping = 'dataset'
             return json.loads(text)
         except:
             cnt += 1
-            if cnt > 5:
+            if cnt > max_retries:
                 raise
-            logging.exception(f'Error on parsing ({cnt}/{5}) ...')
+            logging.exception(f'Error on parsing ({cnt}/{max_retries}) ...')
