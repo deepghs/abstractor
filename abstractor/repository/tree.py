@@ -431,16 +431,17 @@ def ask_llm_for_hf_repo_info(repo_id: str, repo_type: RepoTypeTyping = 'dataset'
 
         for fn in expected_filenames:
             if fn.lower().endswith('.md') or fn.lower().endswith('.py'):
-                logging.info(f'Loading text file {fn!r} ...')
-                print(f'## {fn}', file=sf)
-                print(f'', file=sf)
-                print(pathlib.Path(hf_hub_download(
-                    repo_id=repo_id,
-                    repo_type=repo_type,
-                    filename=fn, revision=revision,
-                    token=hf_token,
-                )).read_text(), file=sf)
-                print(f'', file=sf)
+                pass
+                # logging.info(f'Loading text file {fn!r} ...')
+                # print(f'## {fn}', file=sf)
+                # print(f'', file=sf)
+                # print(pathlib.Path(hf_hub_download(
+                #     repo_id=repo_id,
+                #     repo_type=repo_type,
+                #     filename=fn, revision=revision,
+                #     token=hf_token,
+                # )).read_text(), file=sf)
+                # print(f'', file=sf)
             else:
                 _sfn = _get_sample_fn(fn)
                 if _sfn is None:
