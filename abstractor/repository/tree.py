@@ -3,6 +3,7 @@ import logging
 import os
 import pathlib
 import re
+import time
 from functools import partial
 from typing import Optional, Union, List
 
@@ -488,6 +489,7 @@ def ask_llm_for_hf_repo_info(repo_id: str, repo_type: RepoTypeTyping = 'dataset'
                 **parse_json_from_llm_output(text),
                 "repo_id": repo_id,
                 "repo_type": repo_type,
+                "created_at": time.time(),
             }
         except:
             cnt += 1
