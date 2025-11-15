@@ -2,15 +2,16 @@ import io
 import json
 import logging
 import os
+import pathlib
 import re
 from functools import partial
-from pprint import pformat
 from typing import Optional, Union, List
 
 from hbutils.string import format_tree, plural_word
 from hfutils.entry.tree import TreeItem
 from hfutils.operate.base import RepoTypeTyping, list_files_in_repository, get_hf_client
 from hfutils.utils import hf_normpath, get_file_type, hf_fs_path, FileItemType
+from huggingface_hub import hf_hub_download
 from huggingface_hub.hf_api import RepoFile
 from natsort import natsorted
 
@@ -307,8 +308,14 @@ Analyze the provided Hugging Face repository information and return a JSON objec
     "abstract": "Abstract of this repository, should contain approx 40-60 words",
     "bio": "One sentence to describe what this repository is for",
     "keywords": ["Keyword 1", "Keyword 2", "Keyword 3", ...],
-    "is_ready_to_view": true/false,
-    "is_clear_enough": true/false
+    "is_ready_to_view": {{
+        "yes": true/false,
+        "reason": "reason why it is (not) ready, if not ready what should we do",
+    }},
+    "is_clear_enough": {{
+        "yes": true/false,
+        "reason": "reason why it is (not) clear, if not clear enough what should we do",
+    }}
 }}
 ```
 
@@ -322,7 +329,10 @@ Analyze the provided Hugging Face repository information and return a JSON objec
 - For space repositories: Identify the tasks demonstrated or supported
 - Available options include: {", ".join(_TASK_TYPES)}, and others as appropriate.
 
-**libraries**: Identify the key libraries, frameworks, and tools used or supported. Common options include: transformers, PyTorch, TensorFlow, JAX, ONNX, scikit-learn, pandas, numpy, OpenCV, Pillow, datasets, accelerate, diffusers, tokenizers, safetensors, gradio, streamlit, fastapi, and others as appropriate.
+**libraries**: 
+- Identify the key libraries, frameworks, and tools used or supported.
+- For dataset, you should only use those libraries which explicitly mentioned or supported due to the README for some data. 
+- Common options include: transformers, PyTorch, TensorFlow, JAX, ONNX, scikit-learn, pandas, numpy, OpenCV, Pillow, datasets, accelerate, diffusers, tokenizers, safetensors, gradio, streamlit, fastapi, and others as appropriate.
 
 **modality**: Identify all data modalities involved. Options include: Text, Image, Audio, Video, Tabular, Time Series, Graph, 3D, Multi-Modal, and others as appropriate.
 
@@ -429,17 +439,16 @@ def ask_llm_for_hf_repo_info(repo_id: str, repo_type: RepoTypeTyping = 'dataset'
 
         for fn in expected_filenames:
             if fn.lower().endswith('.md') or fn.lower().endswith('.py'):
-                pass
-                # logging.info(f'Loading text file {fn!r} ...')
-                # print(f'## {fn}', file=sf)
-                # print(f'', file=sf)
-                # print(pathlib.Path(hf_hub_download(
-                #     repo_id=repo_id,
-                #     repo_type=repo_type,
-                #     filename=fn, revision=revision,
-                #     token=hf_token,
-                # )).read_text(), file=sf)
-                # print(f'', file=sf)
+                logging.info(f'Loading text file {fn!r} ...')
+                print(f'## {fn}', file=sf)
+                print(f'', file=sf)
+                print(pathlib.Path(hf_hub_download(
+                    repo_id=repo_id,
+                    repo_type=repo_type,
+                    filename=fn, revision=revision,
+                    token=hf_token,
+                )).read_text(), file=sf)
+                print(f'', file=sf)
             else:
                 _sfn = _get_sample_fn(fn)
                 if _sfn is None:
