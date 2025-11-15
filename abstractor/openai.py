@@ -1,5 +1,7 @@
+import logging
 import os
 from functools import lru_cache
+from typing import List, Optional, Union
 
 from openai import OpenAI
 
@@ -25,3 +27,26 @@ def get_client() -> OpenAI:
         api_key=os.environ['OPENAI_API_KEY'],
         base_url=os.environ['OPENAI_SITE'],
     )
+
+
+def _prompt_wrap(prompts: Union[str, List[dict]]) -> List[dict]:
+    if isinstance(prompts, str):
+        return [{
+            "role": "user",
+            "content": prompts,
+        }]
+    else:
+        return prompts
+
+
+def ask_llm(prompts: Union[str, List[dict]], model_name: Optional[str] = None):
+    model_name = model_name or os.environ.get('OPENAI_MODEL_NAME') or 'deepseek-reasoner'
+    logging.info(f'Asking model {model_name!r} ...')
+    response = get_client().chat.completions.create(
+        model=model_name,
+        messages=_prompt_wrap(prompts),
+    )
+
+    response_text = response.choices[0].message.content
+    logging.info(f'Response from model {model_name!r}:\n{response_text}')
+    return response_text
