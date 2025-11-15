@@ -341,7 +341,7 @@ Analyze the provided Hugging Face repository information and return a JSON objec
 
 **bio**: Write ONE clear sentence that describes what this repository is used for.
 
-**keywords**: Provide 3-5 relevant keywords that complement the abstract and help categorize the repository.
+**keywords**: Provide 3-5 relevant keywords that complement the abstract and help categorize the repository. All keywords should be capitalized and titleized, like 'WebDataset', 'Image Classification'.
 
 **is_ready_to_view**: Set to `true` if the repository has a comprehensive README that clearly guides users on how to use it. Set to `false` if the README is missing, incomplete, or unclear.
 
