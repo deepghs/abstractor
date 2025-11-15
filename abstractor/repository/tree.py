@@ -484,7 +484,11 @@ def ask_llm_for_hf_repo_info(repo_id: str, repo_type: RepoTypeTyping = 'dataset'
                     }
                 ]
             )
-            return parse_json_from_llm_output(text)
+            return {
+                **parse_json_from_llm_output(text),
+                "repo_id": repo_id,
+                "repo_type": repo_type,
+            }
         except:
             cnt += 1
             if cnt > max_retries:
