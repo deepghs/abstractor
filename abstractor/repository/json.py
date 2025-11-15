@@ -7,6 +7,7 @@ from hbutils.scale import size_to_bytes_str
 from hbutils.string import plural_word
 from hfutils.operate.base import RepoTypeTyping
 from hfutils.utils import hf_fs_path
+from huggingface_hub import hf_hub_download
 
 from ..utils import hf_get_resource_url
 
@@ -166,9 +167,14 @@ def sample_from_json(repo_id: str, filename: str, repo_type: RepoTypeTyping = 'd
         hf_token=hf_token,
     )
 
-    fs = HTTPFileSystem()
     if content_size <= 5 * 1024 ** 1:
-        with fs.open(url, mode="rb") as f:
+        with open(hf_hub_download(
+                repo_id=repo_id,
+                repo_type=repo_type,
+                filename=filename,
+                revision=revision,
+                token=hf_token,
+        ), 'r') as f:
             meta_info = json.load(f)
 
         meta_simplified = JSONSummarizer(
@@ -184,6 +190,7 @@ def sample_from_json(repo_id: str, filename: str, repo_type: RepoTypeTyping = 'd
         }
 
     else:
+        fs = HTTPFileSystem()
         with fs.open(url, mode="r") as f:
             prefix = f.read(truncated_size // 2)
             f.seek(content_size - truncated_size // 2)

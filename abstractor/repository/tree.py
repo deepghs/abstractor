@@ -386,7 +386,7 @@ def _tree_simple(tree: TreeItem):
 
 
 def ask_llm_for_hf_repo_info(repo_id: str, repo_type: RepoTypeTyping = 'dataset', revision: str = 'main',
-                             hf_token: Optional[str] = None, max_items: Optional[int] = 4, max_retries: int = 5):
+                             hf_token: Optional[str] = None, max_retries: int = 5):
     tree_root = _get_tree(
         repo_id=repo_id,
         repo_type=repo_type,
