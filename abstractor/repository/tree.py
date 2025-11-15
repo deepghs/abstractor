@@ -17,6 +17,7 @@ from huggingface_hub.hf_api import RepoFile
 from natsort import natsorted
 
 from .csv import sample_from_csv
+from .json import sample_from_json
 from .jsonl import sample_from_jsonl
 from .parquet import sample_from_parquet
 from .tar import sample_from_tar
@@ -35,6 +36,8 @@ def _get_sample_fn(filename):
         return sample_from_tar
     elif filename_lower.endswith(".tsv"):
         return partial(sample_from_csv, delimiter='\t')  # TSV is CSV with tab delimiter
+    elif filename_lower.endswith('.json'):
+        return sample_from_json
     # JSON format deliberately excluded - requires full file download
 
     return None
@@ -310,7 +313,7 @@ Analyze the provided Hugging Face repository information and return a JSON objec
 
 
 def get_repository_prompt(repo_id: str, repo_type: RepoTypeTyping = 'dataset', revision: str = 'main',
-                          hf_token: Optional[str] = None, max_items: Optional[int] = 10):
+                          hf_token: Optional[str] = None, max_items: Optional[int] = 4):
     tree_root = _get_tree(
         repo_id=repo_id,
         repo_type=repo_type,
