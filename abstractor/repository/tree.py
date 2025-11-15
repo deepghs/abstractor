@@ -395,7 +395,8 @@ def ask_llm_for_hf_repo_info(repo_id: str, repo_type: RepoTypeTyping = 'dataset'
     3. Select representative samples from each major data category
     4. Avoid selecting multiple files that appear to be sequential/similar batches
     5. Ensure selected files together provide comprehensive repository understanding
-    6. Return ONLY the JSON object, no additional text or explanation
+    6. You Must make sure your requested file is actually exist in this repository!!!!
+    7. Return ONLY the JSON object, no additional text or explanation
     """).strip()
 
     with io.StringIO() as sf:
