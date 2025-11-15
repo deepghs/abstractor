@@ -3,6 +3,7 @@ import logging
 import os
 import pathlib
 import re
+import textwrap
 import time
 from functools import partial
 from typing import Optional, Union, List
@@ -255,44 +256,6 @@ ML_FRAMEWORKS: List[str] = [
     'animetimm',
 ]
 
-_PICK_SYSTEM_PROMPT = """
-You are a repository content sampling specialist. Your task is to analyze a given Hugging Face repository directory tree and intelligently select the most informative files for content analysis.
-
-**OBJECTIVE:**
-Given a repository path tree, select up to 8 files that would provide the best understanding of what the repository contains and its purpose. Prioritize efficiency - select fewer files if they provide sufficient information.
-
-**SELECTION CRITERIA (in order of priority):**
-1. **Documentation files**: README.md, documentation, guides
-2. **Metadata/Configuration**: meta.json, config files, dataset cards
-3. **Sample data files**: Representative examples from different data categories
-4. **Code files**: Python scripts, processing code
-5. **Schema/Structure files**: Files that reveal data structure and format
-
-**CONSTRAINTS:**
-- Maximum 8 files total
-- Only select files with these extensions: .md, .py, .parquet, .csv, .tsv, .json, .jsonl, .tar
-- Files must be downloadable via hf_hub_download (use exact repository paths)
-- Avoid redundant content - if files appear to contain similar information based on naming patterns, sample only representative examples
-- Prioritize smaller, more informative files over large data archives when possible
-
-**OUTPUT FORMAT:**
-Return a JSON array of strings, where each string is the exact file path as it appears in the repository tree.
-
-**EXAMPLE:**
-For a repository with README.md, config files, and numbered data batches, you might select:
-```json
-["README.md", "meta.json", "tables/page-1.parquet", "images/0/001.json"]
-```
-
-**ANALYSIS APPROACH:**
-1. First identify documentation and metadata files
-2. Analyze the directory structure to understand data organization
-3. Select representative samples from each major data category
-4. Avoid selecting multiple files that appear to be sequential/similar batches
-5. Ensure selected files together provide comprehensive repository understanding
-6. Return ONLY the JSON object, no additional text or explanation
-"""
-
 _SYSTEM_PROMPT = f"""
 You are an expert AI assistant specialized in analyzing Hugging Face repositories. Your task is to analyze repository information (including README files, data samples, and metadata) and extract structured information in JSON format.
 
@@ -388,7 +351,7 @@ def _tree_simple(tree: TreeItem):
 
 
 def ask_llm_for_hf_repo_info(repo_id: str, repo_type: RepoTypeTyping = 'dataset', revision: str = 'main',
-                             hf_token: Optional[str] = None, max_retries: int = 5):
+                             hf_token: Optional[str] = None, max_retries: int = 5, max_sample_count: int = 15):
     tree_root = _get_tree(
         repo_id=repo_id,
         repo_type=repo_type,
@@ -396,6 +359,44 @@ def ask_llm_for_hf_repo_info(repo_id: str, repo_type: RepoTypeTyping = 'dataset'
         dir_in_repo='.',
         hf_token=hf_token,
     )
+
+    _PICK_SYSTEM_PROMPT = textwrap.dedent(f"""
+    You are a repository content sampling specialist. Your task is to analyze a given Hugging Face repository directory tree and intelligently select the most informative files for content analysis.
+
+    **OBJECTIVE:**
+    Given a repository path tree, select up to {max_sample_count} files that would provide the best understanding of what the repository contains and its purpose. Prioritize efficiency - select fewer files if they provide sufficient information.
+
+    **SELECTION CRITERIA (in order of priority):**
+    1. **Documentation files**: README.md, documentation, guides
+    2. **Metadata/Configuration**: meta.json, config files, dataset cards
+    3. **Sample data files**: Representative examples from different data categories
+    4. **Code files**: Python scripts, processing code
+    5. **Schema/Structure files**: Files that reveal data structure and format
+
+    **CONSTRAINTS:**
+    - Maximum {max_sample_count} files total
+    - Only select files with these extensions: .md, .py, .parquet, .csv, .tsv, .json, .jsonl, .tar
+    - Files must be downloadable via hf_hub_download (use exact repository paths)
+    - Avoid redundant content - if files appear to contain similar information based on naming patterns, sample only representative examples
+    - Prioritize smaller, more informative files over large data archives when possible
+
+    **OUTPUT FORMAT:**
+    Return a JSON array of strings, where each string is the exact file path as it appears in the repository tree.
+
+    **EXAMPLE:**
+    For a repository with README.md, config files, and numbered data batches, you might select:
+    ```json
+    ["README.md", "meta.json", "tables/page-1.parquet", "images/0/001.json"]
+    ```
+
+    **ANALYSIS APPROACH:**
+    1. First identify documentation and metadata files
+    2. Analyze the directory structure to understand data organization
+    3. Select representative samples from each major data category
+    4. Avoid selecting multiple files that appear to be sequential/similar batches
+    5. Ensure selected files together provide comprehensive repository understanding
+    6. Return ONLY the JSON object, no additional text or explanation
+    """).strip()
 
     with io.StringIO() as sf:
         print(f'Repo ID: {repo_id}', file=sf)
