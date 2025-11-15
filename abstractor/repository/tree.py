@@ -335,7 +335,7 @@ Analyze the provided Hugging Face repository information and return a JSON objec
 
 **modality**: Identify all data modalities involved. Options include: Text, Image, Audio, Video, Tabular, Time Series, Graph, 3D, Multi-Modal, and others as appropriate.
 
-**abstract**: Write a concise 40-60 word summary describing what this repository does, its functionality, and its value/purpose.
+**abstract**: Write a concise 40-60 word summary describing what this repository does, contains (e.g. how many images/texts/something else if possible to know that), its functionality, and its value/purpose.
 
 **bio**: Write ONE clear sentence that describes what this repository is used for.
 
