@@ -460,6 +460,9 @@ def ask_llm_for_hf_repo_info(repo_id: str, repo_type: RepoTypeTyping = 'dataset'
 
         prompt = sf.getvalue()
 
+        with open('test_mf.txt', 'w') as f:
+            print(prompt, file=f)
+
     cnt = 0
     while cnt < max_retries:
         try:
