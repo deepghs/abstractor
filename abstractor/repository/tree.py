@@ -2,7 +2,6 @@ import io
 import json
 import logging
 import os
-import pathlib
 import re
 from functools import partial
 from pprint import pformat
@@ -12,7 +11,6 @@ from hbutils.string import format_tree, plural_word
 from hfutils.entry.tree import TreeItem
 from hfutils.operate.base import RepoTypeTyping, list_files_in_repository, get_hf_client
 from hfutils.utils import hf_normpath, get_file_type, hf_fs_path, FileItemType
-from huggingface_hub import hf_hub_download
 from huggingface_hub.hf_api import RepoFile
 from natsort import natsorted
 
@@ -449,13 +447,13 @@ def ask_llm_for_hf_repo_info(repo_id: str, repo_type: RepoTypeTyping = 'dataset'
 
                 print(f'## {fn}', file=sf)
                 print(f'', file=sf)
-                print(pformat(_sfn(
+                print(_sfn(
                     repo_id=repo_id,
                     repo_type=repo_type,
                     filename=fn,
                     revision=revision,
                     hf_token=hf_token,
-                )), file=sf)
+                ), file=sf)
                 print(f'', file=sf)
 
         prompt = sf.getvalue()

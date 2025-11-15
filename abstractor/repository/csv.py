@@ -9,7 +9,7 @@ from ..utils import hf_get_resource_url
 
 
 def sample_from_csv(repo_id: str, filename: str, repo_type: RepoTypeTyping = 'dataset', revision: str = 'main',
-                    hf_token: Optional[str] = None, max_rows: int = 10, delimiter: str = ","):
+                    hf_token: Optional[str] = None, max_rows: int = 5, delimiter: str = ","):
     fs_path = hf_fs_path(
         repo_id=repo_id,
         repo_type=repo_type,

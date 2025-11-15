@@ -10,7 +10,7 @@ from ..utils import hf_get_resource_url
 
 
 def sample_from_tar(repo_id: str, filename: str, repo_type: RepoTypeTyping = 'dataset', revision: str = 'main',
-                    hf_token: Optional[str] = None, max_files: int = 100):
+                    hf_token: Optional[str] = None, max_files: int = 20):
     fs_path = hf_fs_path(
         repo_id=repo_id,
         repo_type=repo_type,
