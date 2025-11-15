@@ -379,6 +379,7 @@ def ask_llm_for_hf_repo_info(repo_id: str, repo_type: RepoTypeTyping = 'dataset'
     - Files must be downloadable via hf_hub_download (use exact repository paths)
     - Avoid redundant content - if files appear to contain similar information based on naming patterns, sample only representative examples
     - Prioritize smaller, more informative files over large data archives when possible
+    - You must make sure your selected file is exist!!! To make sure about this, you can only select files that explicitly exist in the given directory tree, not the probably existing ones.
 
     **OUTPUT FORMAT:**
     Return a JSON array of strings, where each string is the exact file path as it appears in the repository tree.
