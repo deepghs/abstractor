@@ -7,6 +7,8 @@ def parse_json_from_llm_output(text: str):
     has_prefix = False
     for line in text.splitlines(keepends=False):
         line = line.strip()
+        if not line:
+            continue
         if not lines and line.startswith('```'):
             has_prefix = True
         else:
