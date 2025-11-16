@@ -251,9 +251,21 @@ ML_FRAMEWORKS: List[str] = [
     "unity-sentis",
     "DDUF",
     "univa",
+    "Ultralytics",
+
+    "datasets",
+    "accelerate",
+    "diffusers",
+    "tokenizers",
+    "safetensors",
+
+    "streamlit",
+    "gradio",
+    "fastapi",
 
     'dghs-imgutils',
     'animetimm',
+    'cheesechaser',
 ]
 
 _SYSTEM_PROMPT = f"""
@@ -296,7 +308,7 @@ Analyze the provided Hugging Face repository information and return a JSON objec
 **libraries**: 
 - Identify the key libraries, frameworks, and tools used or supported.
 - For dataset, you should only use those libraries which explicitly mentioned or supported due to the README for some data. 
-- Common options include: transformers, PyTorch, TensorFlow, JAX, ONNX, scikit-learn, pandas, numpy, OpenCV, Pillow, datasets, accelerate, diffusers, tokenizers, safetensors, gradio, streamlit, fastapi, and others as appropriate.
+- Common options include: {", ".join(ML_FRAMEWORKS)}, and others as appropriate.
 
 **modality**: Identify all data modalities involved. Options include: Text, Image, Audio, Video, Tabular, Time Series, Graph, 3D, Multi-Modal, and others as appropriate.
 
@@ -322,18 +334,29 @@ Analyze the provided Hugging Face repository information and return a JSON objec
 """
 
 
-def _tree_simple(tree: TreeItem):
+def _tree_simple(tree: TreeItem, max_cnt: Optional[int] = 20):
     children = []
     child_cnt, child_cnt_added = 0, 0
+    sub_cnt, sub_cnt_added = 0, 0
     for item in tree.children:
         if item.type_ == FileItemType.FOLDER:
-            children.append(_tree_simple(item))
+            if max_cnt is not None and sub_cnt < max_cnt:
+                children.append(_tree_simple(item))
+                sub_cnt_added += 1
+            sub_cnt += 1
         else:
-            if child_cnt < 10:
+            if max_cnt is not None and child_cnt < max_cnt:
                 children.append(item)
                 child_cnt_added += 1
             child_cnt += 1
 
+    if sub_cnt > sub_cnt_added:
+        children.append(TreeItem(
+            name=f'... {plural_word(sub_cnt, "folder")} in total ...',
+            type_=FileItemType.FOLDER,
+            children=[],
+            exist=True,
+        ))
     if child_cnt > child_cnt_added:
         children.append(TreeItem(
             name=f'... {plural_word(child_cnt, "file")} in total ...',
