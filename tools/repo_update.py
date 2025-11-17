@@ -324,9 +324,9 @@ Before output, verify:
 if __name__ == '__main__':
     logging.try_init_root(level=logging.INFO)
     sync(
-        repo_id='deepghs/tagger_vocabs',
+        repo_id='deepghs/nsfw_detect',
         repo_type='dataset',
         extra_text=('''
-vocabs data for tagger models, maybe useful for some basic NLP calculation.
+when use it just download this zip and unzip it, it is an image folder, just it
         ''')
     )
