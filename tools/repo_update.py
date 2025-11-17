@@ -10,11 +10,26 @@ from hfutils.operate.base import RepoTypeTyping
 from abstractor.openai import ask_llm
 from abstractor.repository import get_hf_repo_abstract_prompt
 
+_EXPECTED_TASKS = [
+    'text-classification', 'token-classification', 'table-question-answering', 'question-answering',
+    'zero-shot-classification', 'translation', 'summarization', 'feature-extraction', 'text-generation', 'fill-mask',
+    'sentence-similarity', 'text-to-speech', 'text-to-audio', 'automatic-speech-recognition', 'audio-to-audio',
+    'audio-classification', 'audio-text-to-text', 'voice-activity-detection', 'depth-estimation',
+    'image-classification', 'object-detection', 'image-segmentation', 'text-to-image', 'image-to-text',
+    'image-to-image', 'image-to-video', 'unconditional-image-generation', 'video-classification',
+    'reinforcement-learning', 'robotics', 'tabular-classification', 'tabular-regression', 'tabular-to-text',
+    'table-to-text', 'multiple-choice', 'text-ranking', 'text-retrieval', 'time-series-forecasting', 'text-to-video',
+    'image-text-to-text', 'visual-question-answering', 'document-question-answering', 'zero-shot-image-classification',
+    'graph-ml', 'mask-generation', 'zero-shot-object-detection', 'text-to-3d', 'image-to-3d',
+    'image-feature-extraction', 'video-text-to-text', 'keypoint-detection', 'visual-document-retrieval', 'any-to-any',
+    'video-to-video', 'other'
+]
+
 
 def sync(repo_id: str, repo_type: RepoTypeTyping = 'dataset', revision: str = 'main',
          hf_token: Optional[str] = None, max_retries: int = 5, max_sample_count: int = 15,
          extra_text: str = ''):
-    _SYSTEM_PROMPT = textwrap.dedent("""
+    _SYSTEM_PROMPT = textwrap.dedent(f"""
 You are an expert AI assistant specialized in creating professional README.md files for Hugging Face repositories. Follow these comprehensive guidelines to generate perfect documentation:
 
 #### 1. Repository Type Identification
@@ -29,10 +44,8 @@ You are an expert AI assistant specialized in creating professional README.md fi
 **Model Repository Metadata**:
 ```yaml
 pipeline_tag: (REQUIRED) # Official task type
-  - Options: text-classification, text-generation, token-classification, 
-             question-answering, fill-mask, automatic-speech-recognition,
-             image-classification, object-detection, text-to-image
-  - Format: Single string value
+  - Options: {", ".join(_EXPECTED_TASKS)}
+  - Format: Single string value (must be one of the above)
 
 license: (REQUIRED) # SPDX identifier
   - Options: apache-2.0, mit, bsd-3-clause, gpl-3.0, cc-by-4.0, 
@@ -60,7 +73,8 @@ widget:
 **Dataset Repository Metadata**:
 ```yaml
 task_categories: (REQUIRED)
-  - Format: [text-classification, question-answering, translation]
+  - Options: {", ".join(_EXPECTED_TASKS)}
+  - Format: List of string value (all items used must be one of the above)
 language: (REQUIRED) # ISO 639-1 codes
   - Format: [en, zh, fr, de, es, multilingual]
 license: (REQUIRED) 
@@ -133,31 +147,31 @@ pip install [required packages]
 4. **Citation Templates**:
 ```bibtex
 # For ORIGINAL WORK (this repository is the source)
-@misc{repository_identifier,
+@misc{{repository_identifier,
   title        = {{Full Repository Title}},
-  author       = {Author1 and Author2 and ...},
-  howpublished = {\\url{https://huggingface.co/username/repo}},
-  year         = {2023},
-  note         = {Summary of key contributions: [1-2 sentence abstract]},
-  abstract     = {Full 200+ word abstract from the Summary section},
-  keywords     = {Keyword1, Keyword2, Keyword3}
-}
+  author       = {{Author1 and Author2 and ...}},
+  howpublished = {{\\url{{https://huggingface.co/username/repo}}}},
+  year         = {{2023}},
+  note         = {{Summary of key contributions: [1-2 sentence abstract]}},
+  abstract     = {{Full 200+ word abstract from the Summary section}},
+  keywords     = {{Keyword1, Keyword2, Keyword3}}
+}}
 
 # For NON-ORIGINAL WORK (pointing to original source)
-@inproceedings{original_paper,
-  title     = {Original Paper Title},
-  author    = {Original Author1 and Original Author2},
-  booktitle = {Conference/Journal Name},
-  year      = {2020},
-  url       = {https://arxiv.org/abs/xxxx.xxxxx}
-}
-@misc{original_repository,
-  title        = {Original Repository Title},
-  author       = {Original Maintainer},
-  howpublished = {\\url{https://huggingface.co/original/repo}},
-  year         = {2022},
-  note         = {This repository provides an implementation/adaptation of the original work}
-}
+@inproceedings{{original_paper,
+  title     = {{Original Paper Title}},
+  author    = {{Original Author1 and Original Author2}},
+  booktitle = {{Conference/Journal Name}},
+  year      = {{2020}},
+  url       = {{https://arxiv.org/abs/xxxx.xxxxx}}
+}}
+@misc{{original_repository,
+  title        = {{Original Repository Title}},
+  author       = {{Original Maintainer}},
+  howpublished = {{\\url{{https://huggingface.co/original/repo}}}},
+  year         = {{2022}},
+  note         = {{This repository provides an implementation/adaptation of the original work}}
+}}
 ```
 
 5. **Metadata Requirements**:
@@ -192,13 +206,13 @@ pip install [required packages]
 
 8. **Fallback for Missing Information**:
 ```bibtex
-@misc{repository,
+@misc{{repository,
   title        = {{Repository Title}},
-  author       = {Repository Contributors},
-  howpublished = {\\url{https://huggingface.co/username/repo}},
-  year         = {2023},
-  note         = {[Brief description from metadata or summary]}
-}
+  author       = {{Repository Contributors}},
+  howpublished = {{\\url{{https://huggingface.co/username/repo}}}},
+  year         = {{2023}},
+  note         = {{[Brief description from metadata or summary]}}
+}}
 ```
 
 This revised approach ensures proper attribution while providing rich, reusable citation metadata that:
