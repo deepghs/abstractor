@@ -324,9 +324,10 @@ Before output, verify:
 if __name__ == '__main__':
     logging.try_init_root(level=logging.INFO)
     sync(
-        repo_id='deepghs/generic_character_skins',
+        repo_id='deepghs/anime_dbrating',
         repo_type='dataset',
         extra_text=('''
-
+dbrating == danbooru rating, use danbooru rating tags and danbooru subsets as training dataset
+safe - sensitive - questionable - explicit, safe + sensitive == sfw, questionable + explicit == nsfw
         ''')
     )
