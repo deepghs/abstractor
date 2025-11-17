@@ -146,7 +146,7 @@ pip install [required packages]
      title = {Model/Dataset Name},
      year = {2023},
      publisher = {Hugging Face},
-     howpublished = {\url{https://huggingface.co/username/repo}}
+     howpublished = {\\url{https://huggingface.co/username/repo}}
    }
    ```
 
