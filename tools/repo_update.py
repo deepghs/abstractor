@@ -121,34 +121,95 @@ pip install [required packages]
 
 #### 4. Citation Section Rules
 1. **Position**: Always place at the **end** of the README
-2. **Content**:
-   - Preserve original citation if exists in source material
-   - If no original citation:
-     - Generate BibTeX entry when paper title/author are available
-     - Use repository URL as fallback citation
+2. **Content Determination**:
+   - **Non-Original Work** (derivative models/datasets):
+     - Point to original authors and source
+     - Include full original citation details
+     - Add note: "This repository provides an implementation/adaptation of the original work"
+   - **Original Work** (novel contribution):
+     - Cite this repository as the primary source
+     - Include comprehensive details about the work
 3. **Format Requirements**:
    - Wrap in triple-backtick code block with `bibtex` language identifier
-   - Follow standard BibTeX format:
-   ```bibtex
-   @article{key,
-     title = {Paper Title},
-     author = {Author1 and Author2},
-     journal = {Journal Name},
-     year = {2023},
-     url = {https://huggingface.co/username/repo}
-   }
-   ```
-4. **Fallback Options**:
-   - When only repository is available:
-   ```bibtex
-   @misc{repository,
-     author = {Your Name},
-     title = {Model/Dataset Name},
-     year = {2023},
-     publisher = {Hugging Face},
-     howpublished = {\\url{https://huggingface.co/username/repo}}
-   }
-   ```
+   - Follow standard BibTeX format with complete metadata
+
+4. **Citation Templates**:
+```bibtex
+# For ORIGINAL WORK (this repository is the source)
+@misc{repository_identifier,
+  title        = {{Full Repository Title}},
+  author       = {Author1 and Author2 and ...},
+  howpublished = {\\url{https://huggingface.co/username/repo}},
+  year         = {2023},
+  note         = {Summary of key contributions: [1-2 sentence abstract]},
+  abstract     = {Full 200+ word abstract from the Summary section},
+  keywords     = {Keyword1, Keyword2, Keyword3}
+}
+
+# For NON-ORIGINAL WORK (pointing to original source)
+@inproceedings{original_paper,
+  title     = {Original Paper Title},
+  author    = {Original Author1 and Original Author2},
+  booktitle = {Conference/Journal Name},
+  year      = {2020},
+  url       = {https://arxiv.org/abs/xxxx.xxxxx}
+}
+@misc{original_repository,
+  title        = {Original Repository Title},
+  author       = {Original Maintainer},
+  howpublished = {\\url{https://huggingface.co/original/repo}},
+  year         = {2022},
+  note         = {This repository provides an implementation/adaptation of the original work}
+}
+```
+
+5. **Metadata Requirements**:
+   - Must include:
+     - `title`: Full repository name/title
+     - `author`: All contributors (format: "Name1 and Name2 and ...")
+     - `howpublished`: Full Hugging Face repository URL
+     - `year`: Creation/publication year
+     - `note`: Brief 1-2 sentence summary of key contributions
+     - `abstract`: Full abstract from the Summary section
+     - `keywords`: 3-5 keywords from the Summary section
+   - Optional but recommended:
+     - `doi`: Digital Object Identifier if available
+     - `version`: Model/dataset version
+
+6. **Originality Determination**:
+   - Considered **Original Work** if:
+     - Novel architecture/methodology introduced
+     - New dataset created (not derived from existing)
+     - Significant original contributions beyond fine-tuning
+   - Considered **Non-Original** if:
+     - Direct fine-tune of existing model
+     - Minor adaptation of existing work
+     - Derived from existing dataset with minimal changes
+
+7. **Information Sourcing**:
+   - Author names: From repository owners/contributors
+   - Year: From creation date in repository history
+   - Abstract: Use the generated Summary section content
+   - Keywords: Use the bolded keywords from Summary
+   - Title: Use the main repository title
+
+8. **Fallback for Missing Information**:
+```bibtex
+@misc{repository,
+  title        = {{Repository Title}},
+  author       = {Repository Contributors},
+  howpublished = {\\url{https://huggingface.co/username/repo}},
+  year         = {2023},
+  note         = {[Brief description from metadata or summary]}
+}
+```
+
+This revised approach ensures proper attribution while providing rich, reusable citation metadata that:
+1. Gives appropriate credit for original work
+2. Provides comprehensive information for academic citation
+3. Maintains direct connection to the repository
+4. Includes all necessary elements for LaTeX/BibTeX users
+5. Clearly distinguishes between original and derivative works
 
 #### 5. Critical Preservation Rules
 1. **Exact Copy Requirements**:
