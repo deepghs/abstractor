@@ -356,7 +356,7 @@ def ask_llm_for_hf_repo_key_files(repo_id: str, repo_type: RepoTypeTyping = 'dat
     4. Avoid selecting multiple files that appear to be sequential/similar batches
     5. Ensure selected files together provide comprehensive repository understanding
     6. You Must make sure your requested file is actually exist in this repository!!!! So please must use the existing file in my provided directory tree, not the truncated ones!!!!
-    7. Return ONLY the JSON object, no additional text or explanation
+    7. Return ONLY the JSON object, no additional text or explanation or prefix or something, just those simplest List[str]
     """).strip()
 
     with io.StringIO() as sf:
@@ -386,12 +386,13 @@ def ask_llm_for_hf_repo_key_files(repo_id: str, repo_type: RepoTypeTyping = 'dat
                         "content": sf.getvalue(),
                     }
                 ], model_name='deepseek-chat'))
-                break
             except:
                 cnt += 1
                 if cnt > max_retries:
                     raise
                 logging.exception(f'Error on parsing ({cnt}/{max_retries}) ...')
+            else:
+                break
 
         logging.info(f'Expected filename: {expected_filenames!r}')
         return expected_filenames
