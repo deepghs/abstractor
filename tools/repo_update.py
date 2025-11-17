@@ -230,6 +230,8 @@ This revised approach ensures proper attribution while providing rich, reusable 
 
 4. Use dghs-imgutils/dghs-realutils library directly if possible, do not just repeat the code from them.
 
+5. The provided source code in extra content part may contain rst format docs, if you use those content you should make sure all the content is transformed to markdown fomat. e.g. `xxx <yyy>`_ to [xxxx](yyyy), etc.
+
 #### 6. Special Case Handling
 - **No original README**:
   - Generate comprehensive summary from file structure and data samples
