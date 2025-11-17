@@ -314,253 +314,500 @@ Before output, verify:
 if __name__ == '__main__':
     logging.try_init_root(level=logging.INFO)
     sync(
-        repo_id='deepghs/nudenet_onnx',
+        repo_id='deepghs/paddleocr',
         repo_type='model',
-        extra_text="""
+        extra_text=('''
+Source code from library `dghs-imgutils`, you can install it with `pip install dghs-imgutils`
 
-Code of dghs-imgutils, in 'imgutils/detect/nudenet.py':
+Code 'imgutils/ocr/detect.py':
+        
+from typing import List
 
-\"\"\"
-Overview:
-    This module provides functionality for detecting nudity in images using the NudeNet model.
-    
-    The module includes functions for preprocessing images, running the NudeNet YOLO model,
-    applying non-maximum suppression (NMS), and postprocessing the results. It utilizes
-    ONNX models hosted on `deepghs/nudenet_onnx <https://huggingface.co/deepghs/nudenet_onnx>`_
-    for efficient inference. The original project is
-    `notAI-tech/NudeNet <https://github.com/notAI-tech/NudeNet>`_.
-    
-    .. collapse:: Overview of NudeNet Detect (NSFW Warning!!!)
-
-        .. image:: nudenet_detect_demo.plot.py.svg
-            :align: center
-    
-    The main function :func:`detect_with_nudenet` can be used to perform nudity detection on
-    given images, returning a list of bounding boxes, labels, and confidence scores.
-    
-    This is an overall benchmark of all the nudenet models:
-
-    .. image:: nudenet_detect_benchmark.plot.py.svg
-        :align: center
-
-    .. note::
-
-        Here is a detailed list of labels from the NudeNet detection model and their respective meanings:
-
-        .. list-table::
-           :widths: 25 75
-           :header-rows: 1
-
-           * - Label
-             - Description
-           * - FEMALE_GENITALIA_COVERED
-             - Detects covered female genitalia in the image.
-           * - FACE_FEMALE
-             - Detects the face of a female in the image.
-           * - BUTTOCKS_EXPOSED
-             - Detects exposed buttocks in the image.
-           * - FEMALE_BREAST_EXPOSED
-             - Detects exposed female breasts in the image.
-           * - FEMALE_GENITALIA_EXPOSED
-             - Detects exposed female genitalia in the image.
-           * - MALE_BREAST_EXPOSED
-             - Detects exposed male breasts in the image.
-           * - ANUS_EXPOSED
-             - Detects exposed anus in the image.
-           * - FEET_EXPOSED
-             - Detects exposed feet in the image.
-           * - BELLY_COVERED
-             - Detects a covered belly in the image.
-           * - FEET_COVERED
-             - Detects covered feet in the image.
-           * - ARMPITS_COVERED
-             - Detects covered armpits in the image.
-           * - ARMPITS_EXPOSED
-             - Detects exposed armpits in the image.
-           * - FACE_MALE
-             - Detects the face of a male in the image.
-           * - BELLY_EXPOSED
-             - Detects an exposed belly in the image.
-           * - MALE_GENITALIA_EXPOSED
-             - Detects exposed male genitalia in the image.
-           * - ANUS_COVERED
-             - Detects a covered anus in the image.
-           * - FEMALE_BREAST_COVERED
-             - Detects covered female breasts in the image.
-           * - BUTTOCKS_COVERED
-             - Detects covered buttocks in the image.
-
-
-    .. note::
-    
-        This module requires onnxruntime version 1.18 or higher.
-\"\"\"
-
-from typing import Tuple, List
-
+import cv2
 import numpy as np
-from PIL import Image
-from hbutils.testing.requires.version import VersionInfo
-from huggingface_hub import hf_hub_download
+import pyclipper
+from huggingface_hub import hf_hub_download, HfFileSystem
+from shapely import Polygon
 
-from imgutils.data import ImageTyping
-from imgutils.utils import open_onnx_model, ts_lru_cache
-from ..data import load_image
+from ..data import ImageTyping, load_image
+from ..utils import open_onnx_model, ts_lru_cache
 
-
-def _check_compatibility() -> bool:
-    \"\"\"
-    Check if the installed onnxruntime version is compatible with NudeNet.
-
-    :raises EnvironmentError: If the onnxruntime version is less than 1.18.
-    \"\"\"
-    import onnxruntime
-    if VersionInfo(onnxruntime.__version__) < '1.18':
-        raise EnvironmentError(f'Nudenet not supported on onnxruntime {onnxruntime.__version__}, '
-                               f'please upgrade it to 1.18+ version.\n'
-                               f'If you are running on CPU, use "pip install -U onnxruntime" .\n'
-                               f'If you are running on GPU, use "pip install -U onnxruntime-gpu" .')  # pragma: no cover
-
-
-_REPO_ID = 'deepghs/nudenet_onnx'
+_MIN_SIZE = 3
+_HF_CLIENT = HfFileSystem()
+_REPOSITORY = 'deepghs/paddleocr'
 
 
 @ts_lru_cache()
-def _open_nudenet_yolo():
-    \"\"\"
-    Open and cache the NudeNet YOLO ONNX model.
-
-    :return: The loaded ONNX model for YOLO.
-    \"\"\"
+def _open_ocr_detection_model(model):
     return open_onnx_model(hf_hub_download(
-        repo_id=_REPO_ID,
-        repo_type='model',
-        filename='320n.onnx',
+        _REPOSITORY,
+        f'det/{model}/model.onnx',
     ))
+
+
+def _box_score_fast(bitmap, _box):
+    h, w = bitmap.shape[:2]
+    box = _box.copy()
+    xmin = np.clip(np.floor(box[:, 0].min()).astype("int32"), 0, w - 1)
+    xmax = np.clip(np.ceil(box[:, 0].max()).astype("int32"), 0, w - 1)
+    ymin = np.clip(np.floor(box[:, 1].min()).astype("int32"), 0, h - 1)
+    ymax = np.clip(np.ceil(box[:, 1].max()).astype("int32"), 0, h - 1)
+
+    mask = np.zeros((ymax - ymin + 1, xmax - xmin + 1), dtype=np.uint8)
+    box[:, 0] = box[:, 0] - xmin
+    box[:, 1] = box[:, 1] - ymin
+    # noinspection PyTypeChecker
+    cv2.fillPoly(mask, box.reshape(1, -1, 2).astype("int32"), 1)
+    return cv2.mean(bitmap[ymin:ymax + 1, xmin:xmax + 1], mask)[0]
+
+
+def _unclip(box, unclip_ratio):
+    poly = Polygon(box)
+    distance = poly.area * unclip_ratio / poly.length
+    offset = pyclipper.PyclipperOffset()
+    offset.AddPath(box, pyclipper.JT_ROUND, pyclipper.ET_CLOSEDPOLYGON)
+    expanded = np.array(offset.Execute(distance))
+    return expanded
+
+
+def _get_mini_boxes(contour):
+    bounding_box = cv2.minAreaRect(contour)
+    points = sorted(list(cv2.boxPoints(bounding_box)), key=lambda x: x[0])
+
+    if points[1][1] > points[0][1]:
+        index_1 = 0
+        index_4 = 1
+    else:
+        index_1 = 1
+        index_4 = 0
+
+    if points[3][1] > points[2][1]:
+        index_2 = 2
+        index_3 = 3
+    else:
+        index_2 = 3
+        index_3 = 2
+
+    box = [
+        points[index_1], points[index_2], points[index_3], points[index_4]
+    ]
+    return box, min(bounding_box[1])
+
+
+def _boxes_from_bitmap(pred, _bitmap, dest_width, dest_height,
+                       box_threshold=0.7, max_candidates=1000, unclip_ratio=2.0):
+    bitmap = _bitmap
+    height, width = bitmap.shape
+
+    outs = cv2.findContours((bitmap * 255).astype(np.uint8), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    if len(outs) == 3:
+        img, contours, _ = outs[0], outs[1], outs[2]
+    elif len(outs) == 2:
+        contours, _ = outs[0], outs[1]
+
+    # noinspection PyUnboundLocalVariable
+    num_contours = min(len(contours), max_candidates)
+
+    boxes = []
+    scores = []
+    for index in range(num_contours):
+        contour = contours[index]
+        points, sside = _get_mini_boxes(contour)
+        if sside < _MIN_SIZE:
+            continue
+        points = np.array(points)
+        score = _box_score_fast(pred, points.reshape(-1, 2))
+        if box_threshold > score:
+            continue
+
+        box = _unclip(points, unclip_ratio).reshape(-1, 1, 2)
+        box, sside = _get_mini_boxes(box)
+        if sside < _MIN_SIZE + 2:
+            continue
+        box = np.array(box)
+
+        box[:, 0] = np.clip(np.round(box[:, 0] / width * dest_width), 0, dest_width)
+        box[:, 1] = np.clip(np.round(box[:, 1] / height * dest_height), 0, dest_height)
+        boxes.append(box.astype("int32"))
+        scores.append(score)
+    return np.array(boxes, dtype="int32"), scores
+
+
+def _normalize(data, mean=(0.48145466, 0.4578275, 0.40821073), std=(0.26862954, 0.26130258, 0.27577711)):
+    mean, std = np.asarray(mean), np.asarray(std)
+    return (data - mean[None, :, None, None]) / std[None, :, None, None]
+
+
+_ALIGN = 64
+
+
+def _get_text_points(image: ImageTyping, model: str = 'ch_PP-OCRv4_det',
+                     heat_threshold: float = 0.3, box_threshold: float = 0.7,
+                     max_candidates: int = 1000, unclip_ratio: float = 2.0):
+    origin_width, origin_height = width, height = image.size
+    if width % _ALIGN != 0:
+        width += (_ALIGN - width % _ALIGN)
+    if height % _ALIGN != 0:
+        height += (_ALIGN - height % _ALIGN)
+
+    input_ = np.array(image).transpose((2, 0, 1)).astype(np.float32) / 255.0
+    # noinspection PyTypeChecker
+    input_ = np.pad(input_[None, ...], ((0, 0), (0, 0), (0, height - origin_height), (0, width - origin_width)))
+
+    _ort_session = _open_ocr_detection_model(model)
+
+    input_ = _normalize(input_).astype(np.float32)
+    _input_name = _ort_session.get_inputs()[0].name
+    _output_name = _ort_session.get_outputs()[0].name
+    output_, = _ort_session.run([_output_name], {_input_name: input_})
+    heatmap = output_[0][0]
+    heatmap = heatmap[:origin_height, :origin_width]
+
+    retval = []
+    for points, score in zip(*_boxes_from_bitmap(
+            heatmap, heatmap >= heat_threshold, origin_width, origin_height,
+            box_threshold, max_candidates, unclip_ratio,
+    )):
+        retval.append((points, score))
+    return retval
+
+
+def _detect_text(image: ImageTyping, model: str = 'ch_PP-OCRv4_det',
+                 heat_threshold: float = 0.3, box_threshold: float = 0.7,
+                 max_candidates: int = 1000, unclip_ratio: float = 2.0):
+    image = load_image(image, force_background='white', mode='RGB')
+    retval = []
+    for points, score in _get_text_points(image, model, heat_threshold, box_threshold, max_candidates, unclip_ratio):
+        x0, y0 = points[:, 0].min(), points[:, 1].min()
+        x1, y1 = points[:, 0].max(), points[:, 1].max()
+        retval.append(((x0.item(), y0.item(), x1.item(), y1.item()), 'text', score))
+
+    return retval
 
 
 @ts_lru_cache()
-def _open_nudenet_nms():
-    \"\"\"
-    Open and cache the NudeNet NMS ONNX model.
+def _list_det_models() -> List[str]:
+    retval = []
+    repo_segment_cnt = len(_REPOSITORY.split('/'))
+    for item in _HF_CLIENT.glob(f'{_REPOSITORY}/det/*/model.onnx'):
+        retval.append(item.split('/')[repo_segment_cnt:][1])
+    return retval
 
-    :return: The loaded ONNX model for NMS.
-    \"\"\"
-    return open_onnx_model(hf_hub_download(
-        repo_id=_REPO_ID,
-        repo_type='model',
-        filename='nms-yolov8.onnx',
-    ))
+Code 'imgutils/ocr/entry.py'
+
+from typing import List, Tuple
+
+from .detect import _detect_text, _list_det_models
+from .recognize import _text_recognize, _list_rec_models
+from ..data import ImageTyping, load_image
+
+_DEFAULT_DET_MODEL = 'ch_PP-OCRv4_det'
+_DEFAULT_REC_MODEL = 'ch_PP-OCRv4_rec'
 
 
-def _nn_preprocessing(image: ImageTyping, model_size: int = 320) -> Tuple[np.ndarray, float]:
-    \"\"\"
-    Preprocess the input image for the NudeNet model.
+def list_det_models() -> List[str]:
+    """
+    List available text detection models for OCR.
+
+    :return: A list of available text detection model names.
+    :rtype: List[str]
+
+    Examples::
+        >>> from imgutils.ocr import list_det_models
+        >>>
+        >>> list_det_models()
+        ['ch_PP-OCRv2_det',
+         'ch_PP-OCRv3_det',
+         'ch_PP-OCRv4_det',
+         'ch_PP-OCRv4_server_det',
+         'ch_ppocr_mobile_slim_v2.0_det',
+         'ch_ppocr_mobile_v2.0_det',
+         'ch_ppocr_server_v2.0_det',
+         'en_PP-OCRv3_det']
+    """
+    return _list_det_models()
+
+
+def list_rec_models() -> List[str]:
+    """
+    List available text recognition models for OCR.
+
+    :return: A list of available text recognition model names.
+    :rtype: List[str]
+
+    Examples::
+        >>> from imgutils.ocr import list_rec_models
+        >>>
+        >>> list_rec_models()
+        ['arabic_PP-OCRv3_rec',
+         'ch_PP-OCRv2_rec',
+         'ch_PP-OCRv3_rec',
+         'ch_PP-OCRv4_rec',
+         'ch_PP-OCRv4_server_rec',
+         'ch_ppocr_mobile_v2.0_rec',
+         'ch_ppocr_server_v2.0_rec',
+         'chinese_cht_PP-OCRv3_rec',
+         'cyrillic_PP-OCRv3_rec',
+         'devanagari_PP-OCRv3_rec',
+         'en_PP-OCRv3_rec',
+         'en_PP-OCRv4_rec',
+         'en_number_mobile_v2.0_rec',
+         'japan_PP-OCRv3_rec',
+         'ka_PP-OCRv3_rec',
+         'korean_PP-OCRv3_rec',
+         'latin_PP-OCRv3_rec',
+         'ta_PP-OCRv3_rec',
+         'te_PP-OCRv3_rec']
+    """
+    return _list_rec_models()
+
+
+def detect_text_with_ocr(image: ImageTyping, model: str = _DEFAULT_DET_MODEL,
+                         heat_threshold: float = 0.3, box_threshold: float = 0.7,
+                         max_candidates: int = 1000, unclip_ratio: float = 2.0) \
+        -> List[Tuple[Tuple[int, int, int, int], str, float]]:
+    """
+    Detect text in an image using an OCR model.
 
     :param image: The input image.
-    :param model_size: The size to which the image should be resized (default: 320).
-    :return: A tuple containing the preprocessed image array and the scaling ratio.
-    \"\"\"
-    image = load_image(image, mode='RGB', force_background='white')
-    assert image.mode == 'RGB'
-    mat = np.array(image)
+    :type image: ImageTyping
+    :param model: The name of the text detection model.
+    :type model: str, optional
+    :param heat_threshold: The heat map threshold for text detection.
+    :type heat_threshold: float, optional
+    :param box_threshold: The box threshold for text detection.
+    :type box_threshold: float, optional
+    :param max_candidates: The maximum number of candidates to consider.
+    :type max_candidates: int, optional
+    :param unclip_ratio: The unclip ratio for text detection.
+    :type unclip_ratio: float, optional
+    :return: A list of detected text boxes, label (always ``text``), and their confidence scores.
+    :rtype: List[Tuple[Tuple[int, int, int, int], str, float]]
 
-    max_size = max(image.width, image.height)
+    Examples::
+        >>> from imgutils.ocr import detect_text_with_ocr
+        >>>
+        >>> detect_text_with_ocr('comic.jpg')
+        [((742, 485, 809, 511), 'text', 0.9543377610144915),
+         ((682, 98, 734, 124), 'text', 0.9309689495575223),
+         ((716, 136, 836, 164), 'text', 0.9042856988923695),
+         ((144, 455, 196, 485), 'text', 0.874083638387722),
+         ((719, 455, 835, 488), 'text', 0.8628696346175078),
+         ((124, 478, 214, 508), 'text', 0.848871771901487),
+         ((1030, 557, 1184, 578), 'text', 0.8352495440618789),
+         ((427, 129, 553, 154), 'text', 0.8249209443996619)]
 
-    mat_pad = np.zeros((max_size, max_size, 3), dtype=np.uint8)
-    mat_pad[:mat.shape[0], :mat.shape[1], :] = mat
-    img_resized = Image.fromarray(mat_pad, mode='RGB').resize((model_size, model_size), resample=Image.BILINEAR)
-
-    input_data = np.array(img_resized).transpose(2, 0, 1).astype(np.float32) / 255.0
-    input_data = np.expand_dims(input_data, axis=0)
-    return input_data, max_size / model_size
-
-
-def _make_np_config(topk: int = 100, iou_threshold: float = 0.45, score_threshold: float = 0.25) -> np.ndarray:
-    \"\"\"
-    Create a configuration array for the NMS model.
-
-    :param topk: The maximum number of detections to keep (default: 100).
-    :param iou_threshold: The IoU threshold for NMS (default: 0.45).
-    :param score_threshold: The score threshold for detections (default: 0.25).
-    :return: A numpy array containing the configuration parameters.
-    \"\"\"
-    return np.array([topk, iou_threshold, score_threshold]).astype(np.float32)
-
-
-def _nn_postprocess(selected, global_ratio: float):
-    \"\"\"
-    Postprocess the model output to generate bounding boxes and labels.
-
-    :param selected: The output from the NMS model.
-    :param global_ratio: The scaling ratio to apply to the bounding boxes.
-    :return: A list of tuples, each containing a bounding box, label, and confidence score.
-    \"\"\"
-    bboxes = []
-    num_boxes = selected.shape[0]
-    for idx in range(num_boxes):
-        data = selected[idx, :]
-
-        scores = data[4:]
-        score = np.max(scores)
-        label = np.argmax(scores)
-
-        box = data[:4] * global_ratio
-        x = (box[0] - 0.5 * box[2]).item()
-        y = (box[1] - 0.5 * box[3]).item()
-        w = box[2].item()
-        h = box[3].item()
-
-        bboxes.append(((x, y, x + w, y + h), _LABELS[label], score.item()))
-
-    return bboxes
+    .. note::
+        If you need to extract the actual text content, use the :func:`ocr` function.
+    """
+    retval = []
+    for box, _, score in _detect_text(image, model, heat_threshold, box_threshold, max_candidates, unclip_ratio):
+        retval.append((box, 'text', score))
+    retval = sorted(retval, key=lambda x: x[2], reverse=True)
+    return retval
 
 
-_LABELS = [
-    "FEMALE_GENITALIA_COVERED",
-    "FACE_FEMALE",
-    "BUTTOCKS_EXPOSED",
-    "FEMALE_BREAST_EXPOSED",
-    "FEMALE_GENITALIA_EXPOSED",
-    "MALE_BREAST_EXPOSED",
-    "ANUS_EXPOSED",
-    "FEET_EXPOSED",
-    "BELLY_COVERED",
-    "FEET_COVERED",
-    "ARMPITS_COVERED",
-    "ARMPITS_EXPOSED",
-    "FACE_MALE",
-    "BELLY_EXPOSED",
-    "MALE_GENITALIA_EXPOSED",
-    "ANUS_COVERED",
-    "FEMALE_BREAST_COVERED",
-    "BUTTOCKS_COVERED"
-]
+def ocr(image: ImageTyping, detect_model: str = _DEFAULT_DET_MODEL,
+        recognize_model: str = _DEFAULT_REC_MODEL, heat_threshold: float = 0.3, box_threshold: float = 0.7,
+        max_candidates: int = 1000, unclip_ratio: float = 2.0, rotation_threshold: float = 1.5,
+        is_remove_duplicate: bool = False):
+    """
+    Perform optical character recognition (OCR) on an image.
+
+    :param image: The input image.
+    :type image: ImageTyping
+    :param detect_model: The name of the text detection model.
+    :type detect_model: str, optional
+    :param recognize_model: The name of the text recognition model.
+    :type recognize_model: str, optional
+    :param heat_threshold: The heat map threshold for text detection.
+    :type heat_threshold: float, optional
+    :param box_threshold: The box threshold for text detection.
+    :type box_threshold: float, optional
+    :param max_candidates: The maximum number of candidates to consider.
+    :type max_candidates: int, optional
+    :param unclip_ratio: The unclip ratio for text detection.
+    :type unclip_ratio: float, optional
+    :param rotation_threshold: The rotation threshold for text detection.
+    :type rotation_threshold: float, optional
+    :param is_remove_duplicate: Whether to remove duplicate text content.
+    :type is_remove_duplicate: bool, optional
+    :return: A list of detected text boxes, their corresponding text content, and their combined confidence scores.
+    :rtype: List[Tuple[Tuple[int, int, int, int], str, float]]
+
+    Examples::
+        >>> from imgutils.ocr import ocr
+        >>>
+        >>> ocr('comic.jpg')
+        [((742, 485, 809, 511), 'MOB.', 0.9356705927336156),
+         ((716, 136, 836, 164), 'SHISHOU,', 0.8933000384412466),
+         ((682, 98, 734, 124), 'BUT', 0.8730931912907247),
+         ((144, 455, 196, 485), 'OH,', 0.8417627579351514),
+         ((427, 129, 553, 154), 'A MIRROR.', 0.7366019454049503),
+         ((1030, 557, 1184, 578), '(EL)  GATO IBERICO', 0.7271127306351021),
+         ((719, 455, 835, 488), "THAt'S △", 0.701928390168364),
+         ((124, 478, 214, 508), 'LOOK!', 0.6965972578194936)]
+
+        By default, the text recognition model used is `ch_PP-OCRv4_rec`.
+        This recognition model has good recognition capabilities for both Chinese and English.
+        For unsupported text types, its recognition accuracy cannot be guaranteed, resulting in a lower score.
+        **If you need recognition for other languages, please use :func:`list_rec_models` to
+        view more available recognition models and choose the appropriate one for recognition.**
+
+        >>> from imgutils.ocr import ocr
+        >>>
+        >>> # use default recognition model on japanese post
+        >>> ocr('post_text.jpg')
+        [
+            ((319, 847, 561, 899), 'KanColle', 0.9130667787597329),
+            ((552, 811, 791, 921), '1944', 0.8566762346615406),
+            ((319, 820, 558, 850), 'Fleet  Girls Collection', 0.8100635458911772),
+            ((235, 904, 855, 1009), '海', 0.6716076803280185),
+            ((239, 768, 858, 808), 'I ·  tSu · ka ·  A· NO· u·  mI ·  de', 0.654507230718228),
+            ((209, 507, 899, 811), '[', 0.2888084133529467)
+        ]
+        >>>
+        >>> # use japanese model
+        >>> ocr('post_text.jpg', recognize_model='japan_PP-OCRv3_rec')
+        [
+            ((319, 847, 561, 899), 'KanColle', 0.9230690942939336),
+            ((552, 811, 791, 921), '1944', 0.8564870717047623),
+            ((235, 904, 855, 1009), 'いつかあの海で', 0.8061289060358996),
+            ((319, 820, 558, 850), 'Fleet   Girls  Collection', 0.8045396777081609),
+            ((239, 768, 858, 808), 'I.TSU.KA・A・NO.U・MI.DE', 0.7311649382696896),
+            ((209, 507, 899, 811), '「艦とれれ', 0.6648729016512889)
+        ]
+
+    """
+    image = load_image(image)
+    retval = []
+    for (x0, y0, x1, y1), _, score in \
+            _detect_text(image, detect_model, heat_threshold, box_threshold, max_candidates, unclip_ratio):
+        width, height = x1 - x0, y1 - y0
+        area = image.crop((x0, y0, x1, y1))
+        if height >= width * rotation_threshold:
+            area = area.rotate(90)
+
+        text, rec_score = _text_recognize(area, recognize_model, is_remove_duplicate)
+        retval.append(((x0, y0, x1, y1), text, score * rec_score))
+
+    retval = sorted(retval, key=lambda x: x[2], reverse=True)
+    return retval
 
 
-def detect_with_nudenet(image: ImageTyping, topk: int = 100,
-                        iou_threshold: float = 0.45, score_threshold: float = 0.25) \
-        -> List[Tuple[Tuple[int, int, int, int], str, float]]:
-    \"\"\"
-    Detect nudity in the given image using the NudeNet model.
+Code 'imgutils/ocr/recognize.py'
 
-    :param image: The input image to analyze.
-    :param topk: The maximum number of detections to keep (default: 100).
-    :param iou_threshold: The IoU threshold for NMS (default: 0.45).
-    :param score_threshold: The score threshold for detections (default: 0.25).
-    :return: A list of tuples, each containing:
+from typing import List, Tuple
 
-             - A bounding box as (x1, y1, x2, y2)
-             - A label string
-             - A confidence score
-    \"\"\"
-    _check_compatibility()
-    input_, global_ratio = _nn_preprocessing(image, model_size=320)
-    config = _make_np_config(topk, iou_threshold, score_threshold)
-    output0, = _open_nudenet_yolo().run(['output0'], {'images': input_})
-    selected, = _open_nudenet_nms().run(['selected'], {'detection': output0, 'config': config})
-    return _nn_postprocess(selected[0], global_ratio=global_ratio)
+import numpy as np
+from huggingface_hub import hf_hub_download, HfFileSystem
+
+from ..data import ImageTyping, load_image
+from ..utils import open_onnx_model, ts_lru_cache
+
+_HF_CLIENT = HfFileSystem()
+_REPOSITORY = 'deepghs/paddleocr'
 
 
-        """
+@ts_lru_cache()
+def _open_ocr_recognition_model(model):
+    return open_onnx_model(hf_hub_download(
+        _REPOSITORY,
+        f'rec/{model}/model.onnx',
+    ))
+
+
+@ts_lru_cache()
+def _open_ocr_recognition_dictionary(model) -> List[str]:
+    with open(hf_hub_download(
+            _REPOSITORY,
+            f'rec/{model}/dict.txt',
+    ), 'r', encoding='utf-8') as f:
+        dict_ = [line.strip() for line in f]
+
+    return ['<blank>', *dict_, ' ']
+
+
+def _text_decode(text_index, model: str, text_prob=None, is_remove_duplicate=False):
+    retval = []
+    ignored_tokens = [0]
+    batch_size = len(text_index)
+    for batch_idx in range(batch_size):
+        selection = np.ones(len(text_index[batch_idx]), dtype=bool)
+        if is_remove_duplicate:
+            selection[1:] = text_index[batch_idx][1:] != text_index[batch_idx][:-1]
+        for ignored_token in ignored_tokens:
+            selection &= text_index[batch_idx] != ignored_token
+
+        _dict = _open_ocr_recognition_dictionary(model)
+        char_list = [_dict[text_id.item()] for text_id in text_index[batch_idx][selection]]
+        if text_prob is not None:
+            conf_list = text_prob[batch_idx][selection]
+        else:
+            conf_list = [1] * len(selection)
+        if len(conf_list) == 0:
+            conf_list = [0]
+
+        text = ''.join(char_list)
+        retval.append((text, np.mean(conf_list).tolist()))
+
+    return retval
+
+
+def _text_recognize(image: ImageTyping, model: str = 'ch_PP-OCRv4_rec',
+                    is_remove_duplicate: bool = False) -> Tuple[str, float]:
+    _ort_session = _open_ocr_recognition_model(model)
+    expected_height = _ort_session.get_inputs()[0].shape[2]
+
+    image = load_image(image, force_background='white', mode='RGB')
+    r = expected_height / image.height
+    new_height = int(round(image.height * r))
+    new_width = int(round(image.width * r))
+    image = image.resize((new_width, new_height))
+
+    input_ = np.array(image).transpose((2, 0, 1)).astype(np.float32) / 255.0
+    input_ = ((input_ - 0.5) / 0.5)[None, ...].astype(np.float32)
+    _input_name = _ort_session.get_inputs()[0].name
+    _output_name = _ort_session.get_outputs()[0].name
+    output, = _ort_session.run([_output_name], {_input_name: input_})
+
+    indices = output.argmax(axis=2)
+    confs = output.max(axis=2)
+    return _text_decode(indices, model, confs, is_remove_duplicate)[0]
+
+
+@ts_lru_cache()
+def _list_rec_models() -> List[str]:
+    retval = []
+    repo_segment_cnt = len(_REPOSITORY.split('/'))
+    for item in _HF_CLIENT.glob(f'{_REPOSITORY}/rec/*/model.onnx'):
+        retval.append(item.split('/')[repo_segment_cnt:][1])
+    return retval
+
+Code 'imgutils/ocr/__init__.py'
+
+"""
+Overview:
+    Detect and recognize text in images.
+
+    The models are exported from `PaddleOCR <https://github.com/PaddlePaddle/PaddleOCR>`_, hosted on
+    `huggingface - deepghs/paddleocr <https://huggingface.co/deepghs/paddleocr/tree/main>`_.
+
+    .. image:: ocr_demo.plot.py.svg
+        :align: center
+
+    This is an overall benchmark of all the text detection models:
+
+    .. image:: ocr_det_benchmark.plot.py.svg
+        :align: center
+
+    and an overall benchmark of all the available text recognition models:
+
+    .. image:: ocr_rec_benchmark.plot.py.svg
+        :align: center
+
+"""
+from .entry import detect_text_with_ocr, ocr, list_det_models, list_rec_models
+
+        ''')
     )
