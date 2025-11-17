@@ -74,7 +74,7 @@ widget:
 ```yaml
 task_categories: (REQUIRED)
   - Options: {", ".join(_EXPECTED_TASKS)}
-  - Format: List of string value (all items used must be one of the above)
+  - Format: List of string value (all items used must be one of the above), you must use a list even though there is only 1 item
 language: (REQUIRED) # ISO 639-1 codes
   - Format: [en, zh, fr, de, es, multilingual]
 license: (REQUIRED) 
