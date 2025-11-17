@@ -323,12 +323,12 @@ Before output, verify:
 if __name__ == '__main__':
     logging.try_init_root(level=logging.INFO)
     sync(
-        repo_id='deepghs/csip_v1',
+        repo_id='deepghs/csip_eval',
         repo_type='dataset',
         extra_text=('''
 CSIP = (Contrastive anime Style Image Pre-Training), this is the dataset of CSIP
 containing different images of different anime artists
-this is the roughly cleaned raw version, split into different zip archives
+this is the human-picked version, suitable for evaluation
 
 If you are looking for the uncleaned one: [deepghs/csip](https://huggingface.co/datasets/deepghs/csip)
 If you are looking for the roughly cleaned one: [deepghs/csip_v1](https://huggingface.co/datasets/deepghs/csip_v1)
