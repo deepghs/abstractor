@@ -452,15 +452,21 @@ def get_hf_repo_abstract_prompt(repo_id: str, repo_type: RepoTypeTyping = 'datas
                 if _sfn is None:
                     continue
 
+                try:
+                    _sfn_text = _sfn(
+                        repo_id=repo_id,
+                        repo_type=repo_type,
+                        filename=fn,
+                        revision=revision,
+                        hf_token=hf_token,
+                    )
+                except:
+                    logging.exception(f'Sample skipped for file {fn!r}...')
+                    continue
+
                 print(f'## {fn}', file=sf)
                 print(f'', file=sf)
-                print(_sfn(
-                    repo_id=repo_id,
-                    repo_type=repo_type,
-                    filename=fn,
-                    revision=revision,
-                    hf_token=hf_token,
-                ), file=sf)
+                print(_sfn_text, file=sf)
                 print(f'', file=sf)
 
         prompt = sf.getvalue()
