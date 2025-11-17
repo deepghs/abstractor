@@ -17,8 +17,8 @@ BLACKLISTED_MODELS = [
 
 
 def sync(repository: str, deploy_span: float = 5 * 60):
-    hf_client = get_hf_client(hf_token=os.environ['HF_TOKEN_X'])
-    hf_fs = get_hf_fs(hf_token=os.environ['HF_TOKEN_X'])
+    hf_client = get_hf_client()
+    hf_fs = get_hf_fs()
 
     if not hf_client.repo_exists(repo_id=repository, repo_type='dataset'):
         hf_client.create_repo(repo_id=repository, repo_type='dataset', private=True)
@@ -68,7 +68,6 @@ def sync(repository: str, deploy_span: float = 5 * 60):
                 local_directory=td,
                 path_in_repo='.',
                 message=f'Add {plural_word(len(d_models) - _last_model_count, "model")}',
-                hf_token=os.environ['HF_TOKEN_X'],
             )
             has_update = False
             _last_update = time.time()
