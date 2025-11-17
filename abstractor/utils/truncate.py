@@ -2,6 +2,7 @@ import logging
 from typing import List
 
 import tiktoken
+from hbutils.string import plural_word
 
 
 def truncated_by_token(text: str, max_tokens: int = 130000):
@@ -40,7 +41,9 @@ def truncated_prompts_by_token(prompts: List[dict], max_tokens: int = 130000):
 
         max_tokens -= length
         if max_tokens <= 0:
-            logging.warning(f'Rest of the prompts ({i}/{len(prompts)}) get truncated.')
+            rest_count = len(prompts) - i - 1
+            if rest_count > 0:
+                logging.warning(f'Rest of the {plural_word(rest_count, "prompt")} get truncated.')
             break
 
     return retval
