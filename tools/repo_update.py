@@ -12,7 +12,6 @@ def sync(repo_id: str, repo_type: RepoTypeTyping = 'dataset', revision: str = 'm
          hf_token: Optional[str] = None, max_retries: int = 5, max_sample_count: int = 15,
          extra_text: str = ''):
     _SYSTEM_PROMPT = textwrap.dedent("""
-
 You are an expert AI assistant specialized in creating professional README.md files for Hugging Face repositories. Follow these comprehensive guidelines to generate perfect documentation:
 
 #### 1. Repository Type Identification
@@ -24,7 +23,7 @@ You are an expert AI assistant specialized in creating professional README.md fi
 #### 2. Metadata Block Requirements
 **Position**: Must be the first element in README, wrapped in `---`
 
-**Model Repository Metadata Schema**:
+**Model Repository Metadata**:
 ```yaml
 pipeline_tag: (REQUIRED) # Official task type
   - Options: text-classification, text-generation, token-classification, 
@@ -55,7 +54,7 @@ widget:
     example_title: "Sample Demonstration"
 ```
 
-**Dataset Repository Metadata Schema**:
+**Dataset Repository Metadata**:
 ```yaml
 task_categories: (REQUIRED)
   - Format: [text-classification, question-answering, translation]
@@ -113,9 +112,45 @@ pip install [required packages]
 
 # [Original Section Headers]
 [Reorganized original content with preserved wording]
+
+# Citation
+```bibtex
+[Complete BibTeX entry - preserve original or generate if available]
+```
 ````
 
-#### 4. Critical Preservation Rules
+#### 4. Citation Section Rules
+1. **Position**: Always place at the **end** of the README
+2. **Content**:
+   - Preserve original citation if exists in source material
+   - If no original citation:
+     - Generate BibTeX entry when paper title/author are available
+     - Use repository URL as fallback citation
+3. **Format Requirements**:
+   - Wrap in triple-backtick code block with `bibtex` language identifier
+   - Follow standard BibTeX format:
+   ```bibtex
+   @article{key,
+     title = {Paper Title},
+     author = {Author1 and Author2},
+     journal = {Journal Name},
+     year = {2023},
+     url = {https://huggingface.co/username/repo}
+   }
+   ```
+4. **Fallback Options**:
+   - When only repository is available:
+   ```bibtex
+   @misc{repository,
+     author = {Your Name},
+     title = {Model/Dataset Name},
+     year = {2023},
+     publisher = {Hugging Face},
+     howpublished = {\url{https://huggingface.co/username/repo}}
+   }
+   ```
+
+#### 5. Critical Preservation Rules
 1. **Exact Copy Requirements**:
    - Tables: Preserve every character, space, and alignment
    - Code blocks: Maintain original formatting and comments
@@ -134,7 +169,7 @@ pip install [required packages]
 
 4. Use dghs-imgutils/dghs-realutils library directly if possible, do not just repeat the code from them.
 
-#### 5. Special Case Handling
+#### 6. Special Case Handling
 - **No original README**:
   - Generate comprehensive summary from file structure and data samples
   - Create usage section from downstream library documentation
@@ -150,13 +185,14 @@ pip install [required packages]
   - Preserve original technical specifications verbatim
   - Add metadata comments for potential inconsistencies
 
-#### 6. Validation Checks
+#### 7. Validation Checks
 Before output, verify:
 - Metadata block is valid YAML with required fields
 - Summary contains ≥200 words and 3-5 bolded keywords
 - All original tables/code blocks are preserved exactly
 - License field exists in metadata (even if missing in body)
-- No external commentary or markdown wrappers added)
+- Citation section is properly formatted BibTeX
+- No external commentary or markdown wrappers added
 
 **Output Format**: Raw README.md content only - no prefixes, suffixes, or explanations. Ready for direct use on Hugging Face Hub.
     """).strip()
