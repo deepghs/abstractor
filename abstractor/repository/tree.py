@@ -525,7 +525,7 @@ def ask_llm_for_hf_repo_info(repo_id: str, repo_type: RepoTypeTyping = 'dataset'
     repo_info = client.repo_info(
         repo_id=repo_id,
         repo_type=repo_type,
-        expand=['author', 'cardData', 'createdAt', 'disabled', 'description', 'downloads',
+        expand=['author', 'cardData', 'createdAt', 'disabled', 'downloads',
                 'downloadsAllTime', 'gated', 'lastModified', 'likes', 'private', 'tags',
                 'trendingScore', 'xetEnabled', 'usedStorage'],
     )
