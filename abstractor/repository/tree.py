@@ -268,71 +268,6 @@ ML_FRAMEWORKS: List[str] = [
     'cheesechaser',
 ]
 
-_SYSTEM_PROMPT = f"""
-You are an expert AI assistant specialized in analyzing Hugging Face repositories. Your task is to analyze repository information (including README files, data samples, and metadata) and extract structured information in JSON format.
-
-## Your Task
-Analyze the provided Hugging Face repository information and return a JSON object with the following structure:
-
-```json
-{{
-    "repo_id": "huggingface/repo",
-    "repo_type": "model/dataset/space",
-    "task_types": ["Task Type 1", "Task Type 2", ...],
-    "libraries": ["Library 1", "Library 2", ...],
-    "modality": ["Modality 1", "Modality 2", ...],
-    "abstract": "Abstract of this repository, should contain approx 40-60 words",
-    "bio": "One sentence to describe what this repository is for",
-    "keywords": ["Keyword 1", "Keyword 2", "Keyword 3", ...],
-    "is_ready_to_view": {{
-        "yes": true/false,
-        "reason": "reason why it is (not) ready, if not ready what should we do",
-    }},
-    "is_clear_enough": {{
-        "yes": true/false,
-        "reason": "reason why it is (not) clear, if not clear enough what should we do",
-    }}
-}}
-```
-
-## Field Guidelines
-
-**repo_type**: Determine if this is a "model", "dataset", or "space" repository.
-
-**task_types**: 
-- For model repositories: Identify the specific ML tasks this model can perform, must be accurate, do not contain those task types not quite sure enough due to the given information 
-- For dataset repositories: Identify ALL possible ML tasks this dataset can be used for, you need to analyze and make your own judgment, not do not contain those impossible ones (e.g. for datasets without mask plz do not given me image-segmentation)
-- For space repositories: Identify the tasks demonstrated or supported, must be accurate
-- Available options include: {", ".join(_TASK_TYPES)}, and others as appropriate.
-
-**libraries**: 
-- Identify the key libraries, frameworks, and tools used or supported.
-- For dataset, you should only use those libraries which explicitly mentioned or supported due to the README for some data. 
-- Common options include: {", ".join(ML_FRAMEWORKS)}, and others as appropriate.
-
-**modality**: Identify all data modalities involved. Options include: Text, Image, Audio, Video, Tabular, Time Series, Graph, 3D, Multi-Modal, and others as appropriate.
-
-**abstract**: Write a concise 40-60 word summary describing what this repository does, contains (e.g. how many images/texts/something else if possible to know that), its functionality, and its value/purpose.
-
-**bio**: Write ONE clear sentence that describes what this repository is used for.
-
-**keywords**: Provide 3-5 relevant keywords that complement the abstract and help categorize the repository. All keywords should be capitalized and titleized, like 'WebDataset', 'Image Classification'.
-
-**is_ready_to_view**: Set to `true` if the repository has a comprehensive README that clearly guides users on how to use it. Set to `false` if the README is missing, incomplete, or unclear.
-
-**is_clear_enough**: Set to `true` if the repository's purpose and functionality can be clearly determined from its name, content samples, and description, and if this aligns with any existing README. Set to `false` if the repository's purpose is ambiguous or unclear.
-
-## Instructions
-1. Analyze all provided information carefully
-2. Be precise and specific in your classifications
-3. For datasets, consider multiple potential use cases
-4. Ensure your abstract is exactly 40-60 words
-5. Make your bio concise but informative
-6. Choose keywords that accurately represent the repository's domain and purpose
-7. Be honest in your assessment of readiness and clarity
-8. Return ONLY the JSON object, no additional text or explanation
-"""
-
 
 def _tree_simple(tree: TreeItem, max_cnt: Optional[int] = 20):
     children = []
@@ -496,6 +431,95 @@ def ask_llm_for_hf_repo_info(repo_id: str, repo_type: RepoTypeTyping = 'dataset'
 
         with open('test_mf.txt', 'w') as f:
             print(prompt, file=f)
+
+    _SYSTEM_PROMPT = textwrap.dedent(f"""
+    You are an expert AI assistant specialized in analyzing Hugging Face repositories. Your task is to analyze repository information (including README files, data samples, and metadata) and extract structured information in JSON format.
+
+    ## Your Task
+    Analyze the provided Hugging Face repository information and return a JSON object with the following structure:
+
+    ```json
+    {{
+        "repo_id": "huggingface/repo",
+        "repo_type": "model/dataset/space",
+        "task_types": ["Task Type 1", "Task Type 2", ...],
+        "libraries": ["Library 1", "Library 2", ...],
+        "modality": ["Modality 1", "Modality 2", ...],
+        "abstract": "Abstract of this repository, should contain approx 40-60 words",
+        "bio": "One sentence to describe what this repository is for",
+        "keywords": ["Keyword 1", "Keyword 2", "Keyword 3", ...],
+        "is_ready_to_view": {{
+            "yes": true/false,
+            "reason": "reason why it is (not) ready, if not ready what should we do",
+        }},
+        "is_clear_enough": {{
+            "yes": true/false,
+            "reason": "reason why it is (not) clear, if not clear enough what should we do",
+        }}
+    }}
+    ```
+
+    ## Field Guidelines
+
+    **repo_type**: Determine if this is a "model", "dataset", or "space" repository.
+
+    **task_types**:
+    - For model repositories: Identify the specific ML tasks this model can perform, must be accurate, do not contain those task types not quite sure enough due to the given information 
+    - For dataset repositories: Identify ALL possible ML tasks this dataset can be used for, you need to analyze and make your own judgment, not do not contain those impossible ones (e.g. for datasets without mask plz do not given me image-segmentation)
+    - For space repositories: Identify the tasks demonstrated or supported, must be accurate
+    - Available options include: {", ".join(_TASK_TYPES)}, and others as appropriate.
+
+    **libraries**:
+    - Identify the key libraries, frameworks, and tools used or supported.
+    - For dataset, you should only use those libraries which explicitly mentioned or supported due to the README for some data. 
+    - Common options include: {", ".join(ML_FRAMEWORKS)}, and others as appropriate.
+
+    **modality**: Identify all data modalities involved. Options include: Text, Image, Audio, Video, Tabular, Time Series, Graph, 3D, Multi-Modal, and others as appropriate.
+
+    **abstract**: Write a comprehensive 135-180 word summary following academic paper abstract conventions but adapted for open-source repositories:
+
+    - **For model repositories**:
+      - Start with the problem statement and motivation
+      - Describe the technical approach, architecture innovations, and key methodological contributions
+      - Present quantitative results, performance metrics, and comparisons with existing methods when available
+      - Highlight the model's capabilities, supported tasks, and technical specifications
+      - Discuss the significance for both academic research and industrial applications
+      - Mention training data scale, computational requirements, or efficiency improvements if relevant
+
+    - **For dataset repositories**:
+      - Begin with the research problem or application domain this dataset addresses
+      - Describe the data collection methodology, curation process, and quality assurance measures
+      - Provide quantitative details: dataset size, number of samples, annotation types, and coverage statistics
+      - Explain the dataset's unique characteristics, annotations, and technical format specifications
+      - Discuss potential research applications and how it advances the field
+      - Address limitations, ethical considerations, or novel aspects that distinguish it from existing datasets
+
+    - **For space repositories**:
+      - Introduce the demonstrated application or interactive system's purpose
+      - Describe the underlying technical implementation, model integration, and system architecture
+      - Explain the user interface design, interaction capabilities, and supported functionalities
+      - Present the technical stack, performance characteristics, and scalability features
+      - Discuss the educational, research, or practical value for the community
+      - Highlight how it bridges research and practical applications or enables new use cases
+
+    **bio**: Write ONE clear sentence that describes what this repository is used for.
+
+    **keywords**: Provide 3-5 relevant keywords that complement the abstract and help categorize the repository. All keywords should be capitalized and titleized, like 'WebDataset', 'Image Classification'.
+
+    **is_ready_to_view**: Set to `true` if the repository has a comprehensive README that clearly guides users on how to use it. Set to `false` if the README is missing, incomplete, or unclear.
+
+    **is_clear_enough**: Set to `true` if the repository's purpose and functionality can be clearly determined from its name, content samples, and description, and if this aligns with any existing README. Set to `false` if the repository's purpose is ambiguous or unclear.
+
+    ## Instructions
+    1. Analyze all provided information carefully
+    2. Be precise and specific in your classifications
+    3. For datasets, consider multiple potential use cases
+    4. Ensure your abstract is exactly 40-60 words
+    5. Make your bio concise but informative
+    6. Choose keywords that accurately represent the repository's domain and purpose
+    7. Be honest in your assessment of readiness and clarity
+    8. Return ONLY the JSON object, no additional text or explanation
+    """).strip()
 
     cnt = 0
     while cnt < max_retries:
