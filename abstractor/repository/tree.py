@@ -549,7 +549,7 @@ def ask_llm_for_hf_repo_info(repo_id: str, repo_type: RepoTypeTyping = 'dataset'
 
     **keywords**: Provide 3-5 relevant keywords that complement the abstract and help categorize the repository, should be matched with abstract part. All keywords should be capitalized and titleized, like 'WebDataset', 'Image Classification'.
 
-    **is_ready_to_view**: Set to `true` if the repository has a comprehensive README that clearly guides users on how to use it. Set to `false` if the README is missing, incomplete, or unclear.
+    **is_ready_to_view**: Set to `true` if the repository has a comprehensive README that clearly guides users on how to use it. Set to `false` if the README is missing, incomplete, or unclear. And attention that 'gated' is not a reason for not ready enough, the user is able to see the README and folder directory even when HF_TOKEN is not provided.
 
     **is_clear_enough**: Set to `true` if the repository's purpose and functionality can be clearly determined from its name, content samples, and description, and if this aligns with any existing README. Set to `false` if the repository's purpose is ambiguous or unclear.
 
