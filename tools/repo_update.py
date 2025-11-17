@@ -324,7 +324,7 @@ Before output, verify:
 if __name__ == '__main__':
     logging.try_init_root(level=logging.INFO)
     sync(
-        repo_id='deepghs/sankaku_tags_categorize_for_WD14Tagger',
+        repo_id='deepghs/anime_dbrating',
         repo_type='dataset',
         extra_text=('''
 
