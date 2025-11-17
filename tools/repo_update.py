@@ -324,7 +324,7 @@ Before output, verify:
 if __name__ == '__main__':
     logging.try_init_root(level=logging.INFO)
     sync(
-        repo_id='deepghs/anime_dbrating',
+        repo_id='deepghs/generic_character_skins',
         repo_type='dataset',
         extra_text=('''
 
