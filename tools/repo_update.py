@@ -324,9 +324,9 @@ Before output, verify:
 if __name__ == '__main__':
     logging.try_init_root(level=logging.INFO)
     sync(
-        repo_id='deepghs/anime_eye_detection',
+        repo_id='deepghs/anime_halfbody_detection',
         repo_type='dataset',
         extra_text=('''
-ultralytics-compatible dataset for anime character eyes bboxes
+ultralytics-compatible dataset for anime character halfbody bboxes
         ''')
     )
