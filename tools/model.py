@@ -1,0 +1,101 @@
+import os
+import time
+
+import pandas as pd
+from ditk import logging
+from hbutils.string import plural_word
+from hbutils.system import TemporaryDirectory
+from hfutils.operate import get_hf_client, get_hf_fs, upload_directory_as_directory
+from tqdm import tqdm
+
+from abstractor.repository import ask_llm_for_hf_repo_info
+
+BLACKLISTED_MODELS = [
+    'deepghs/animefull-latest',
+    'deepghs/animefull-latest-ckpt',
+]
+
+
+def sync(repository: str, deploy_span: float = 5 * 60):
+    hf_client = get_hf_client(hf_token=os.environ['HF_TOKEN_X'])
+    hf_fs = get_hf_fs(hf_token=os.environ['HF_TOKEN_X'])
+
+    if not hf_client.repo_exists(repo_id=repository, repo_type='dataset'):
+        hf_client.create_repo(repo_id=repository, repo_type='dataset', private=True)
+        attr_lines = hf_fs.read_text(f'datasets/{repository}/.gitattributes').splitlines(keepends=False)
+        attr_lines.append('*.json filter=lfs diff=lfs merge=lfs -text')
+        attr_lines.append('*.csv filter=lfs diff=lfs merge=lfs -text')
+        hf_fs.write_text(
+            f'datasets/{repository}/.gitattributes',
+            os.linesep.join(attr_lines),
+        )
+
+    if hf_client.file_exists(
+            repo_id=repository,
+            repo_type='dataset',
+            filename='models.parquet'
+    ):
+        df_models = pd.read_parquet(hf_client.hf_hub_download(
+            repo_id=repository,
+            repo_type='dataset',
+            filename='models.parquet'
+        ))
+        df_models = df_models[~df_models['repo_id'].isin(BLACKLISTED_MODELS)]
+        d_models = {item['repo_id']: item for item in df_models.to_dict('records')}
+    else:
+        d_models = {}
+
+    _last_update, has_update = None, False
+    _last_model_count = len(d_models)
+
+    def _deploy(force=False):
+        nonlocal _last_update, has_update, _last_model_count
+
+        if not has_update:
+            return
+        if not force and _last_update is not None and _last_update + deploy_span > time.time():
+            return
+
+        with TemporaryDirectory() as td:
+            df_models = pd.DataFrame(list(d_models.values()))
+            df_models = df_models.sort_values(by=['downloads'], ascending=[False])
+            models_parquet_file = os.path.join(td, 'models.parquet')
+            df_models.to_parquet(models_parquet_file, index=False)
+
+            upload_directory_as_directory(
+                repo_id=repository,
+                repo_type='dataset',
+                local_directory=td,
+                path_in_repo='.',
+                message=f'Add {plural_word(len(d_models) - _last_model_count, "model")}',
+                hf_token=os.environ['HF_TOKEN_X'],
+            )
+            has_update = False
+            _last_update = time.time()
+            _last_model_count = len(d_models)
+
+    for repo_item in tqdm(list(hf_client.list_models(author='deepghs'))):
+        repo_id = repo_item.id
+        if repo_id in BLACKLISTED_MODELS:
+            continue
+        if repo_item.private:
+            continue
+        if repo_id in d_models:
+            continue
+
+        logging.info(f'Repository: {repo_id!r}, repo_type: {"model"!r} ...')
+        d_models[repo_id] = ask_llm_for_hf_repo_info(
+            repo_id=repo_id,
+            repo_type='model',
+        )
+        has_update = True
+        _deploy(force=False)
+
+    _deploy(force=True)
+
+
+if __name__ == '__main__':
+    logging.try_init_root(level=logging.INFO)
+    sync(
+        repository=os.environ['DS_REPO_ID']
+    )

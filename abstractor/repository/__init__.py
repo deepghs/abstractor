@@ -3,3 +3,4 @@ from .json import sample_from_json
 from .jsonl import sample_from_jsonl
 from .parquet import sample_from_parquet
 from .tar import sample_from_tar
+from .tree import ask_llm_for_hf_repo_info
