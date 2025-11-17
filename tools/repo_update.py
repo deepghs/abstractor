@@ -118,12 +118,6 @@ pip install [required packages]
 [Complete runnable example with imports, loading, and execution]
 ```
 
-## Original Content
-[EXACT preservation of original tables, code blocks, and diagrams]
-
-# [Original Section Headers]
-[Reorganized original content with preserved wording]
-
 # Citation
 ```bibtex
 [Complete BibTeX entry - preserve original or generate if available]
@@ -243,7 +237,12 @@ This revised approach ensures proper attribution while providing rich, reusable 
 
 5. The provided source code in extra content part may contain rst format docs, if you use those content you should make sure all the content is transformed to markdown fomat. e.g. `xxx <yyy>`_ to [xxxx](yyyy), etc.
 
-6. For dataset repositories, unless there is very explicit clues of some library supported (e.g. cheesechaser, dghs-imgutils or huggingface datasets, etc, for dghs-imgutils, you can only use this when you see it in original README or i give you some imformation about this in the user prompt, otherwise you are forbidden to use it), you do not have to provide example code of using it.
+6. For dataset repositories, unless there is very explicit clues of some library supported (e.g. cheesechaser, dghs-imgutils or huggingface datasets, etc, for dghs-imgutils, you can only use this when you see it in original README or I give you some information about this in the user prompt, otherwise you are forbidden to use it), you do not have to provide example code of using it.
+   DO NOT TRY TO GUESS its usage like dghs-imgutils unless I explicitly told you.
+   DO NOT TRY TO GUESS its datasets library usages unless you see something like 'datasets_info.json'.
+
+7. You should keep the original key contents in the old version of README.md (if exist).
+   Especially for the original tables, you should 100% keep it in your output without any changes, and organize those content in a good way. 
 
 #### 6. Special Case Handling
 - **No original README**:
@@ -324,9 +323,15 @@ Before output, verify:
 if __name__ == '__main__':
     logging.try_init_root(level=logging.INFO)
     sync(
-        repo_id='deepghs/nsfw_detect',
+        repo_id='deepghs/csip',
         repo_type='dataset',
         extra_text=('''
-when use it just download this zip and unzip it, it is an image folder, just it
+CSIP = (Contrastive anime Style Image Pre-Training), this is the dataset of CSIP
+containing different images of different anime artists
+this is the uncleaned raw version, split into different zip archives
+
+If you are looking for the uncleaned one: deepghs/csip
+If you are looking for the roughly cleaned one: deepghs/csip_v1
+If you are looking for the human picked one: deepghs/csip_eval (but maybe small, just okay for evaluation) 
         ''')
     )
