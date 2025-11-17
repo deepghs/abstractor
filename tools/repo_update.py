@@ -11,15 +11,6 @@ from abstractor.repository import get_hf_repo_abstract_prompt
 def sync(repo_id: str, repo_type: RepoTypeTyping = 'dataset', revision: str = 'main',
          hf_token: Optional[str] = None, max_retries: int = 5, max_sample_count: int = 15,
          extra_text: str = ''):
-    prompt = get_hf_repo_abstract_prompt(
-        repo_id=repo_id,
-        repo_type=repo_type,
-        revision=revision,
-        hf_token=hf_token,
-        max_retries=max_retries,
-        max_sample_count=max_sample_count,
-    )
-
     _SYSTEM_PROMPT = textwrap.dedent("""
 
 You are an expert AI assistant specialized in creating professional README.md files for Hugging Face repositories. Follow these comprehensive guidelines to generate perfect documentation:
@@ -141,6 +132,8 @@ pip install [required packages]
    - Body text: Only include license information if present in original README
    - Metadata: Always include license field (use defaults if missing)
 
+4. Use dghs-imgutils/dghs-realutils library directly if possible, do not just repeat the code from them.
+
 #### 5. Special Case Handling
 - **No original README**:
   - Generate comprehensive summary from file structure and data samples
@@ -192,11 +185,14 @@ Before output, verify:
                 # model_name='deepseek-reasoner',
                 model_name='deepseek-chat',
             )
+
         except:
             cnt += 1
             if cnt > max_retries:
                 raise
             logging.exception(f'Error on parsing ({cnt}/{max_retries}) ...')
+        else:
+            break
 
 
 if __name__ == '__main__':
