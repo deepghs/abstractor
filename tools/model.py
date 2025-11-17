@@ -41,6 +41,8 @@ def sync(repository: str, deploy_span: float = 5 * 60):
             filename='models.parquet'
         ))
         df_models = df_models[~df_models['repo_id'].isin(BLACKLISTED_MODELS)]
+        df_models = df_models[df_models['is_ready_to_view'].map(lambda x: x['yes'])]
+        df_models = df_models[df_models['is_clear_enough'].map(lambda x: x['yes'])]
         d_models = {item['repo_id']: item for item in df_models.to_dict('records')}
     else:
         d_models = {}
