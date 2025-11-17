@@ -314,500 +314,153 @@ Before output, verify:
 if __name__ == '__main__':
     logging.try_init_root(level=logging.INFO)
     sync(
-        repo_id='deepghs/paddleocr',
+        repo_id='deepghs/ml-danbooru-onnx',
         repo_type='model',
         extra_text=('''
 Source code from library `dghs-imgutils`, you can install it with `pip install dghs-imgutils`
 
-Code 'imgutils/ocr/detect.py':
+And this guy 7eu7d7 is a member of deepghs as well, so this can be treated as original-created by deepghs as well.
+
+Code 'imgutils/tagging/mldanbooru.py':
         
-from typing import List
+"""
+Overview:
+    Tagging utils based on ML-danbooru which is provided by 7eu7d7. The code is here:
+    `7eu7d7/ML-Danbooru <https://github.com/7eu7d7/ML-Danbooru>`_ .
+"""
+from typing import Tuple, List
 
-import cv2
 import numpy as np
-import pyclipper
-from huggingface_hub import hf_hub_download, HfFileSystem
-from shapely import Polygon
+import pandas as pd
+from PIL import Image
+from huggingface_hub import hf_hub_download
 
-from ..data import ImageTyping, load_image
+from .overlap import drop_overlap_tags
+from ..data import load_image, ImageTyping
 from ..utils import open_onnx_model, ts_lru_cache
 
-_MIN_SIZE = 3
-_HF_CLIENT = HfFileSystem()
-_REPOSITORY = 'deepghs/paddleocr'
+
+@ts_lru_cache()
+def _open_mldanbooru_model():
+    return open_onnx_model(hf_hub_download('deepghs/ml-danbooru-onnx', 'ml_caformer_m36_dec-5-97527.onnx'))
+
+
+def _resize_align(image: Image.Image, size: int, keep_ratio: float = True, align: int = 4) -> Image.Image:
+    if not keep_ratio:
+        target_size = (size, size)
+    else:
+        min_edge = min(image.size)
+        target_size = (
+            int(image.size[0] / min_edge * size),
+            int(image.size[1] / min_edge * size),
+        )
+
+    target_size = (
+        (target_size[0] // align) * align,
+        (target_size[1] // align) * align,
+    )
+
+    return image.resize(target_size, resample=Image.BILINEAR)
+
+
+def _to_tensor(image: Image.Image):
+    # noinspection PyTypeChecker
+    img: np.ndarray = np.array(image, dtype=np.uint8, copy=True)
+    img = img.reshape((image.size[1], image.size[0], len(image.getbands())))
+
+    # put it from HWC to CHW format
+    img = img.transpose((2, 0, 1))
+    return img.astype(np.float32) / 255
 
 
 @ts_lru_cache()
-def _open_ocr_detection_model(model):
-    return open_onnx_model(hf_hub_download(
-        _REPOSITORY,
-        f'det/{model}/model.onnx',
-    ))
+def _get_mldanbooru_labels(use_real_name: bool = False) -> Tuple[List[str], List[int], List[int]]:
+    path = hf_hub_download('deepghs/imgutils-models', 'mldanbooru/mldanbooru_tags.csv')
+    df = pd.read_csv(path)
+
+    return df["name"].tolist() if not use_real_name else df['real_name'].tolist()
 
 
-def _box_score_fast(bitmap, _box):
-    h, w = bitmap.shape[:2]
-    box = _box.copy()
-    xmin = np.clip(np.floor(box[:, 0].min()).astype("int32"), 0, w - 1)
-    xmax = np.clip(np.ceil(box[:, 0].max()).astype("int32"), 0, w - 1)
-    ymin = np.clip(np.floor(box[:, 1].min()).astype("int32"), 0, h - 1)
-    ymax = np.clip(np.ceil(box[:, 1].max()).astype("int32"), 0, h - 1)
-
-    mask = np.zeros((ymax - ymin + 1, xmax - xmin + 1), dtype=np.uint8)
-    box[:, 0] = box[:, 0] - xmin
-    box[:, 1] = box[:, 1] - ymin
-    # noinspection PyTypeChecker
-    cv2.fillPoly(mask, box.reshape(1, -1, 2).astype("int32"), 1)
-    return cv2.mean(bitmap[ymin:ymax + 1, xmin:xmax + 1], mask)[0]
-
-
-def _unclip(box, unclip_ratio):
-    poly = Polygon(box)
-    distance = poly.area * unclip_ratio / poly.length
-    offset = pyclipper.PyclipperOffset()
-    offset.AddPath(box, pyclipper.JT_ROUND, pyclipper.ET_CLOSEDPOLYGON)
-    expanded = np.array(offset.Execute(distance))
-    return expanded
-
-
-def _get_mini_boxes(contour):
-    bounding_box = cv2.minAreaRect(contour)
-    points = sorted(list(cv2.boxPoints(bounding_box)), key=lambda x: x[0])
-
-    if points[1][1] > points[0][1]:
-        index_1 = 0
-        index_4 = 1
-    else:
-        index_1 = 1
-        index_4 = 0
-
-    if points[3][1] > points[2][1]:
-        index_2 = 2
-        index_3 = 3
-    else:
-        index_2 = 3
-        index_3 = 2
-
-    box = [
-        points[index_1], points[index_2], points[index_3], points[index_4]
-    ]
-    return box, min(bounding_box[1])
-
-
-def _boxes_from_bitmap(pred, _bitmap, dest_width, dest_height,
-                       box_threshold=0.7, max_candidates=1000, unclip_ratio=2.0):
-    bitmap = _bitmap
-    height, width = bitmap.shape
-
-    outs = cv2.findContours((bitmap * 255).astype(np.uint8), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-    if len(outs) == 3:
-        img, contours, _ = outs[0], outs[1], outs[2]
-    elif len(outs) == 2:
-        contours, _ = outs[0], outs[1]
-
-    # noinspection PyUnboundLocalVariable
-    num_contours = min(len(contours), max_candidates)
-
-    boxes = []
-    scores = []
-    for index in range(num_contours):
-        contour = contours[index]
-        points, sside = _get_mini_boxes(contour)
-        if sside < _MIN_SIZE:
-            continue
-        points = np.array(points)
-        score = _box_score_fast(pred, points.reshape(-1, 2))
-        if box_threshold > score:
-            continue
-
-        box = _unclip(points, unclip_ratio).reshape(-1, 1, 2)
-        box, sside = _get_mini_boxes(box)
-        if sside < _MIN_SIZE + 2:
-            continue
-        box = np.array(box)
-
-        box[:, 0] = np.clip(np.round(box[:, 0] / width * dest_width), 0, dest_width)
-        box[:, 1] = np.clip(np.round(box[:, 1] / height * dest_height), 0, dest_height)
-        boxes.append(box.astype("int32"))
-        scores.append(score)
-    return np.array(boxes, dtype="int32"), scores
-
-
-def _normalize(data, mean=(0.48145466, 0.4578275, 0.40821073), std=(0.26862954, 0.26130258, 0.27577711)):
-    mean, std = np.asarray(mean), np.asarray(std)
-    return (data - mean[None, :, None, None]) / std[None, :, None, None]
-
-
-_ALIGN = 64
-
-
-def _get_text_points(image: ImageTyping, model: str = 'ch_PP-OCRv4_det',
-                     heat_threshold: float = 0.3, box_threshold: float = 0.7,
-                     max_candidates: int = 1000, unclip_ratio: float = 2.0):
-    origin_width, origin_height = width, height = image.size
-    if width % _ALIGN != 0:
-        width += (_ALIGN - width % _ALIGN)
-    if height % _ALIGN != 0:
-        height += (_ALIGN - height % _ALIGN)
-
-    input_ = np.array(image).transpose((2, 0, 1)).astype(np.float32) / 255.0
-    # noinspection PyTypeChecker
-    input_ = np.pad(input_[None, ...], ((0, 0), (0, 0), (0, height - origin_height), (0, width - origin_width)))
-
-    _ort_session = _open_ocr_detection_model(model)
-
-    input_ = _normalize(input_).astype(np.float32)
-    _input_name = _ort_session.get_inputs()[0].name
-    _output_name = _ort_session.get_outputs()[0].name
-    output_, = _ort_session.run([_output_name], {_input_name: input_})
-    heatmap = output_[0][0]
-    heatmap = heatmap[:origin_height, :origin_width]
-
-    retval = []
-    for points, score in zip(*_boxes_from_bitmap(
-            heatmap, heatmap >= heat_threshold, origin_width, origin_height,
-            box_threshold, max_candidates, unclip_ratio,
-    )):
-        retval.append((points, score))
-    return retval
-
-
-def _detect_text(image: ImageTyping, model: str = 'ch_PP-OCRv4_det',
-                 heat_threshold: float = 0.3, box_threshold: float = 0.7,
-                 max_candidates: int = 1000, unclip_ratio: float = 2.0):
-    image = load_image(image, force_background='white', mode='RGB')
-    retval = []
-    for points, score in _get_text_points(image, model, heat_threshold, box_threshold, max_candidates, unclip_ratio):
-        x0, y0 = points[:, 0].min(), points[:, 1].min()
-        x1, y1 = points[:, 0].max(), points[:, 1].max()
-        retval.append(((x0.item(), y0.item(), x1.item(), y1.item()), 'text', score))
-
-    return retval
-
-
-@ts_lru_cache()
-def _list_det_models() -> List[str]:
-    retval = []
-    repo_segment_cnt = len(_REPOSITORY.split('/'))
-    for item in _HF_CLIENT.glob(f'{_REPOSITORY}/det/*/model.onnx'):
-        retval.append(item.split('/')[repo_segment_cnt:][1])
-    return retval
-
-Code 'imgutils/ocr/entry.py'
-
-from typing import List, Tuple
-
-from .detect import _detect_text, _list_det_models
-from .recognize import _text_recognize, _list_rec_models
-from ..data import ImageTyping, load_image
-
-_DEFAULT_DET_MODEL = 'ch_PP-OCRv4_det'
-_DEFAULT_REC_MODEL = 'ch_PP-OCRv4_rec'
-
-
-def list_det_models() -> List[str]:
+def get_mldanbooru_tags(image: ImageTyping, use_real_name: bool = False,
+                        threshold: float = 0.7, size: int = 448, keep_ratio: bool = False,
+                        drop_overlap: bool = False):
     """
-    List available text detection models for OCR.
+    Overview:
+        Tagging image with ML-Danbooru, similar to
+        `deepghs/ml-danbooru-demo <https://huggingface.co/spaces/deepghs/ml-danbooru-demo>`_.
 
-    :return: A list of available text detection model names.
-    :rtype: List[str]
+    :param image: Image to tagging.
+    :param use_real_name: Use real name on danbooru. Due to the renaming and redirection of many tags
+        on the Danbooru website after the training of ``deepdanbooru``,
+        it may be necessary to use the latest tag names in some application scenarios.
+        The default value of ``False`` indicates the use of the original tag names.
+    :param threshold: Threshold for tags, default is ``0.7``.
+    :param size: Size when passing the resized image into model, default is ``448``.
+    :param keep_ratio: Keep the original ratio between height and width when passing the image into
+        model, default is ``False``.
+    :param drop_overlap: Drop overlap tags or not, default is ``False``.
 
-    Examples::
-        >>> from imgutils.ocr import list_det_models
+    Example:
+        Here are some images for example
+
+        .. image:: tagging_demo.plot.py.svg
+           :align: center
+
+        >>> import os
+        >>> from imgutils.tagging import get_mldanbooru_tags
         >>>
-        >>> list_det_models()
-        ['ch_PP-OCRv2_det',
-         'ch_PP-OCRv3_det',
-         'ch_PP-OCRv4_det',
-         'ch_PP-OCRv4_server_det',
-         'ch_ppocr_mobile_slim_v2.0_det',
-         'ch_ppocr_mobile_v2.0_det',
-         'ch_ppocr_server_v2.0_det',
-         'en_PP-OCRv3_det']
-    """
-    return _list_det_models()
-
-
-def list_rec_models() -> List[str]:
-    """
-    List available text recognition models for OCR.
-
-    :return: A list of available text recognition model names.
-    :rtype: List[str]
-
-    Examples::
-        >>> from imgutils.ocr import list_rec_models
+        >>> get_mldanbooru_tags('skadi.jpg')
+        {'1girl': 0.9999984502792358, 'long_hair': 0.9999946355819702, 'red_eyes': 0.9994951486587524, 'navel': 0.998144268989563, 'breasts': 0.9978417158126831, 'solo': 0.9941409230232239, 'shorts': 0.9799384474754333, 'gloves': 0.979142427444458, 'very_long_hair': 0.961823582649231, 'looking_at_viewer': 0.961323618888855, 'silver_hair': 0.9490893483161926, 'large_breasts': 0.9450850486755371, 'midriff': 0.9425153136253357, 'sweat': 0.9409335255622864, 'thighs': 0.9319437146186829, 'crop_top': 0.9265308976173401, 'baseball_bat': 0.9259042143821716, 'sky': 0.922250509262085, 'holding': 0.9199565052986145, 'outdoors': 0.9175475835800171, 'day': 0.9102761745452881, 'black_gloves': 0.9076938629150391, 'stomach': 0.9052775502204895, 'shirt': 0.8938589692115784, 'cowboy_shot': 0.8894285559654236, 'bangs': 0.8891903162002563, 'blue_sky': 0.8845980763435364, 'parted_lips': 0.8842408061027527, 'hair_between_eyes': 0.8659475445747375, 'sportswear': 0.862621009349823, 'no_headwear': 0.8616052865982056, 'cloud': 0.8562789559364319, 'short_shorts': 0.8555729389190674, 'no_hat': 0.8533340096473694, 'black_shorts': 0.8477485775947571, 'short_sleeves': 0.8430152535438538, 'low-tied_long_hair': 0.8340626955032349, 'crop_top_overhang': 0.8266023397445679, 'holding_baseball_bat': 0.8222048282623291, 'standing': 0.8202669620513916, 'black_shirt': 0.8061150312423706, 'ass_visible_through_thighs': 0.7803354859352112, 'thigh_gap': 0.7789446711540222, 'arms_up': 0.7052110433578491}
         >>>
-        >>> list_rec_models()
-        ['arabic_PP-OCRv3_rec',
-         'ch_PP-OCRv2_rec',
-         'ch_PP-OCRv3_rec',
-         'ch_PP-OCRv4_rec',
-         'ch_PP-OCRv4_server_rec',
-         'ch_ppocr_mobile_v2.0_rec',
-         'ch_ppocr_server_v2.0_rec',
-         'chinese_cht_PP-OCRv3_rec',
-         'cyrillic_PP-OCRv3_rec',
-         'devanagari_PP-OCRv3_rec',
-         'en_PP-OCRv3_rec',
-         'en_PP-OCRv4_rec',
-         'en_number_mobile_v2.0_rec',
-         'japan_PP-OCRv3_rec',
-         'ka_PP-OCRv3_rec',
-         'korean_PP-OCRv3_rec',
-         'latin_PP-OCRv3_rec',
-         'ta_PP-OCRv3_rec',
-         'te_PP-OCRv3_rec']
-    """
-    return _list_rec_models()
-
-
-def detect_text_with_ocr(image: ImageTyping, model: str = _DEFAULT_DET_MODEL,
-                         heat_threshold: float = 0.3, box_threshold: float = 0.7,
-                         max_candidates: int = 1000, unclip_ratio: float = 2.0) \
-        -> List[Tuple[Tuple[int, int, int, int], str, float]]:
-    """
-    Detect text in an image using an OCR model.
-
-    :param image: The input image.
-    :type image: ImageTyping
-    :param model: The name of the text detection model.
-    :type model: str, optional
-    :param heat_threshold: The heat map threshold for text detection.
-    :type heat_threshold: float, optional
-    :param box_threshold: The box threshold for text detection.
-    :type box_threshold: float, optional
-    :param max_candidates: The maximum number of candidates to consider.
-    :type max_candidates: int, optional
-    :param unclip_ratio: The unclip ratio for text detection.
-    :type unclip_ratio: float, optional
-    :return: A list of detected text boxes, label (always ``text``), and their confidence scores.
-    :rtype: List[Tuple[Tuple[int, int, int, int], str, float]]
-
-    Examples::
-        >>> from imgutils.ocr import detect_text_with_ocr
-        >>>
-        >>> detect_text_with_ocr('comic.jpg')
-        [((742, 485, 809, 511), 'text', 0.9543377610144915),
-         ((682, 98, 734, 124), 'text', 0.9309689495575223),
-         ((716, 136, 836, 164), 'text', 0.9042856988923695),
-         ((144, 455, 196, 485), 'text', 0.874083638387722),
-         ((719, 455, 835, 488), 'text', 0.8628696346175078),
-         ((124, 478, 214, 508), 'text', 0.848871771901487),
-         ((1030, 557, 1184, 578), 'text', 0.8352495440618789),
-         ((427, 129, 553, 154), 'text', 0.8249209443996619)]
+        >>> get_mldanbooru_tags('hutao.jpg')
+        {'1girl': 0.9999866485595703, 'skirt': 0.997043788433075, 'tongue': 0.9969649910926819, 'hair_ornament': 0.9957101345062256, 'tongue_out': 0.9928386807441711, 'flower': 0.9886980056762695, 'twintails': 0.9864778518676758, 'ghost': 0.9769423007965088, 'hair_flower': 0.9747489094734192, 'bag': 0.9736957550048828, 'long_hair': 0.9388670325279236, 'backpack': 0.9356311559677124, 'brown_hair': 0.91000896692276, 'cardigan': 0.8955123424530029, 'red_eyes': 0.8910233378410339, 'plaid': 0.8904104828834534, 'looking_at_viewer': 0.8881211280822754, 'school_uniform': 0.8876776695251465, 'outdoors': 0.8864808678627014, 'jacket': 0.8810517191886902, 'plaid_skirt': 0.8798807263374329, 'ahoge': 0.8765745162963867, 'pleated_skirt': 0.8737136125564575, 'nail_polish': 0.8650439381599426, 'solo': 0.8613706827163696, 'blue_cardigan': 0.8571277260780334, 'bangs': 0.8333670496940613, 'very_long_hair': 0.8160212635993958, 'eyebrows_visible_through_hair': 0.8122442364692688, 'hairclip': 0.8091571927070618, 'red_nails': 0.8082079887390137, ':p': 0.8048468232154846, 'long_sleeves': 0.8042327165603638, 'shirt': 0.7984272241592407, 'blazer': 0.794708251953125, 'ribbon': 0.78981614112854, 'hair_ribbon': 0.7892146110534668, 'star-shaped_pupils': 0.7867060899734497, 'gradient_hair': 0.786359965801239, 'white_shirt': 0.7790888547897339, 'brown_skirt': 0.7760675549507141, 'symbol-shaped_pupils': 0.774523913860321, 'smile': 0.7721588015556335, 'hair_between_eyes': 0.7697228789329529, 'cowboy_shot': 0.755959689617157, 'multicolored_hair': 0.7477189898490906, 'blush': 0.7476690411567688, 'railing': 0.7476617693901062, 'blue_jacket': 0.7458406090736389, 'sleeves_past_wrists': 0.741143524646759, 'day': 0.7364678978919983, 'collared_shirt': 0.7193643450737, 'red_neckwear': 0.7108616828918457, 'flower-shaped_pupils': 0.7086325287818909, 'miniskirt': 0.7055293321609497, 'holding': 0.7039415836334229, 'open_clothes': 0.7018357515335083}
 
     .. note::
-        If you need to extract the actual text content, use the :func:`ocr` function.
+        ML-Danbooru only contains generic tags, so the return value will not be splitted like that in
+        :func:`imgutils.tagging.deepdanbooru.get_deepdanbooru_tags` or
+        :func:`imgutils.tagging.wd14.get_wd14_tags`.
     """
-    retval = []
-    for box, _, score in _detect_text(image, model, heat_threshold, box_threshold, max_candidates, unclip_ratio):
-        retval.append((box, 'text', score))
-    retval = sorted(retval, key=lambda x: x[2], reverse=True)
-    return retval
+    image = load_image(image, mode='RGB')
+    real_input = _to_tensor(_resize_align(image, size, keep_ratio))
+    real_input = real_input.reshape(1, *real_input.shape)
 
+    model = _open_mldanbooru_model()
+    native_output, = model.run(['output'], {'input': real_input})
 
-def ocr(image: ImageTyping, detect_model: str = _DEFAULT_DET_MODEL,
-        recognize_model: str = _DEFAULT_REC_MODEL, heat_threshold: float = 0.3, box_threshold: float = 0.7,
-        max_candidates: int = 1000, unclip_ratio: float = 2.0, rotation_threshold: float = 1.5,
-        is_remove_duplicate: bool = False):
-    """
-    Perform optical character recognition (OCR) on an image.
+    output = (1 / (1 + np.exp(-native_output))).reshape(-1)
+    tags = _get_mldanbooru_labels(use_real_name)
+    pairs = sorted([(tags[i], ratio) for i, ratio in enumerate(output)], key=lambda x: (-x[1], x[0]))
 
-    :param image: The input image.
-    :type image: ImageTyping
-    :param detect_model: The name of the text detection model.
-    :type detect_model: str, optional
-    :param recognize_model: The name of the text recognition model.
-    :type recognize_model: str, optional
-    :param heat_threshold: The heat map threshold for text detection.
-    :type heat_threshold: float, optional
-    :param box_threshold: The box threshold for text detection.
-    :type box_threshold: float, optional
-    :param max_candidates: The maximum number of candidates to consider.
-    :type max_candidates: int, optional
-    :param unclip_ratio: The unclip ratio for text detection.
-    :type unclip_ratio: float, optional
-    :param rotation_threshold: The rotation threshold for text detection.
-    :type rotation_threshold: float, optional
-    :param is_remove_duplicate: Whether to remove duplicate text content.
-    :type is_remove_duplicate: bool, optional
-    :return: A list of detected text boxes, their corresponding text content, and their combined confidence scores.
-    :rtype: List[Tuple[Tuple[int, int, int, int], str, float]]
+    general_tags = {tag: float(ratio) for tag, ratio in pairs if ratio >= threshold}
+    if drop_overlap:
+        general_tags = drop_overlap_tags(general_tags)
+    return general_tags
 
-    Examples::
-        >>> from imgutils.ocr import ocr
-        >>>
-        >>> ocr('comic.jpg')
-        [((742, 485, 809, 511), 'MOB.', 0.9356705927336156),
-         ((716, 136, 836, 164), 'SHISHOU,', 0.8933000384412466),
-         ((682, 98, 734, 124), 'BUT', 0.8730931912907247),
-         ((144, 455, 196, 485), 'OH,', 0.8417627579351514),
-         ((427, 129, 553, 154), 'A MIRROR.', 0.7366019454049503),
-         ((1030, 557, 1184, 578), '(EL)  GATO IBERICO', 0.7271127306351021),
-         ((719, 455, 835, 488), "THAt'S △", 0.701928390168364),
-         ((124, 478, 214, 508), 'LOOK!', 0.6965972578194936)]
-
-        By default, the text recognition model used is `ch_PP-OCRv4_rec`.
-        This recognition model has good recognition capabilities for both Chinese and English.
-        For unsupported text types, its recognition accuracy cannot be guaranteed, resulting in a lower score.
-        **If you need recognition for other languages, please use :func:`list_rec_models` to
-        view more available recognition models and choose the appropriate one for recognition.**
-
-        >>> from imgutils.ocr import ocr
-        >>>
-        >>> # use default recognition model on japanese post
-        >>> ocr('post_text.jpg')
-        [
-            ((319, 847, 561, 899), 'KanColle', 0.9130667787597329),
-            ((552, 811, 791, 921), '1944', 0.8566762346615406),
-            ((319, 820, 558, 850), 'Fleet  Girls Collection', 0.8100635458911772),
-            ((235, 904, 855, 1009), '海', 0.6716076803280185),
-            ((239, 768, 858, 808), 'I ·  tSu · ka ·  A· NO· u·  mI ·  de', 0.654507230718228),
-            ((209, 507, 899, 811), '[', 0.2888084133529467)
-        ]
-        >>>
-        >>> # use japanese model
-        >>> ocr('post_text.jpg', recognize_model='japan_PP-OCRv3_rec')
-        [
-            ((319, 847, 561, 899), 'KanColle', 0.9230690942939336),
-            ((552, 811, 791, 921), '1944', 0.8564870717047623),
-            ((235, 904, 855, 1009), 'いつかあの海で', 0.8061289060358996),
-            ((319, 820, 558, 850), 'Fleet   Girls  Collection', 0.8045396777081609),
-            ((239, 768, 858, 808), 'I.TSU.KA・A・NO.U・MI.DE', 0.7311649382696896),
-            ((209, 507, 899, 811), '「艦とれれ', 0.6648729016512889)
-        ]
-
-    """
-    image = load_image(image)
-    retval = []
-    for (x0, y0, x1, y1), _, score in \
-            _detect_text(image, detect_model, heat_threshold, box_threshold, max_candidates, unclip_ratio):
-        width, height = x1 - x0, y1 - y0
-        area = image.crop((x0, y0, x1, y1))
-        if height >= width * rotation_threshold:
-            area = area.rotate(90)
-
-        text, rec_score = _text_recognize(area, recognize_model, is_remove_duplicate)
-        retval.append(((x0, y0, x1, y1), text, score * rec_score))
-
-    retval = sorted(retval, key=lambda x: x[2], reverse=True)
-    return retval
-
-
-Code 'imgutils/ocr/recognize.py'
-
-from typing import List, Tuple
-
-import numpy as np
-from huggingface_hub import hf_hub_download, HfFileSystem
-
-from ..data import ImageTyping, load_image
-from ..utils import open_onnx_model, ts_lru_cache
-
-_HF_CLIENT = HfFileSystem()
-_REPOSITORY = 'deepghs/paddleocr'
-
-
-@ts_lru_cache()
-def _open_ocr_recognition_model(model):
-    return open_onnx_model(hf_hub_download(
-        _REPOSITORY,
-        f'rec/{model}/model.onnx',
-    ))
-
-
-@ts_lru_cache()
-def _open_ocr_recognition_dictionary(model) -> List[str]:
-    with open(hf_hub_download(
-            _REPOSITORY,
-            f'rec/{model}/dict.txt',
-    ), 'r', encoding='utf-8') as f:
-        dict_ = [line.strip() for line in f]
-
-    return ['<blank>', *dict_, ' ']
-
-
-def _text_decode(text_index, model: str, text_prob=None, is_remove_duplicate=False):
-    retval = []
-    ignored_tokens = [0]
-    batch_size = len(text_index)
-    for batch_idx in range(batch_size):
-        selection = np.ones(len(text_index[batch_idx]), dtype=bool)
-        if is_remove_duplicate:
-            selection[1:] = text_index[batch_idx][1:] != text_index[batch_idx][:-1]
-        for ignored_token in ignored_tokens:
-            selection &= text_index[batch_idx] != ignored_token
-
-        _dict = _open_ocr_recognition_dictionary(model)
-        char_list = [_dict[text_id.item()] for text_id in text_index[batch_idx][selection]]
-        if text_prob is not None:
-            conf_list = text_prob[batch_idx][selection]
-        else:
-            conf_list = [1] * len(selection)
-        if len(conf_list) == 0:
-            conf_list = [0]
-
-        text = ''.join(char_list)
-        retval.append((text, np.mean(conf_list).tolist()))
-
-    return retval
-
-
-def _text_recognize(image: ImageTyping, model: str = 'ch_PP-OCRv4_rec',
-                    is_remove_duplicate: bool = False) -> Tuple[str, float]:
-    _ort_session = _open_ocr_recognition_model(model)
-    expected_height = _ort_session.get_inputs()[0].shape[2]
-
-    image = load_image(image, force_background='white', mode='RGB')
-    r = expected_height / image.height
-    new_height = int(round(image.height * r))
-    new_width = int(round(image.width * r))
-    image = image.resize((new_width, new_height))
-
-    input_ = np.array(image).transpose((2, 0, 1)).astype(np.float32) / 255.0
-    input_ = ((input_ - 0.5) / 0.5)[None, ...].astype(np.float32)
-    _input_name = _ort_session.get_inputs()[0].name
-    _output_name = _ort_session.get_outputs()[0].name
-    output, = _ort_session.run([_output_name], {_input_name: input_})
-
-    indices = output.argmax(axis=2)
-    confs = output.max(axis=2)
-    return _text_decode(indices, model, confs, is_remove_duplicate)[0]
-
-
-@ts_lru_cache()
-def _list_rec_models() -> List[str]:
-    retval = []
-    repo_segment_cnt = len(_REPOSITORY.split('/'))
-    for item in _HF_CLIENT.glob(f'{_REPOSITORY}/rec/*/model.onnx'):
-        retval.append(item.split('/')[repo_segment_cnt:][1])
-    return retval
-
-Code 'imgutils/ocr/__init__.py'
+Code 'imgutils/tagging/__init__.py':
 
 """
 Overview:
-    Detect and recognize text in images.
+    Get tags for anime images.
 
-    The models are exported from `PaddleOCR <https://github.com/PaddlePaddle/PaddleOCR>`_, hosted on
-    `huggingface - deepghs/paddleocr <https://huggingface.co/deepghs/paddleocr/tree/main>`_.
+    This is an overall benchmark of all the danbooru models:
 
-    .. image:: ocr_demo.plot.py.svg
-        :align: center
-
-    This is an overall benchmark of all the text detection models:
-
-    .. image:: ocr_det_benchmark.plot.py.svg
-        :align: center
-
-    and an overall benchmark of all the available text recognition models:
-
-    .. image:: ocr_rec_benchmark.plot.py.svg
+    .. image:: tagging_benchmark.plot.py.svg
         :align: center
 
 """
-from .entry import detect_text_with_ocr, ocr, list_det_models, list_rec_models
+from .blacklist import is_blacklisted, drop_blacklisted_tags
+from .camie import get_camie_tags, convert_camie_emb_to_prediction
+from .character import is_basic_character_tag, drop_basic_character_tags
+from .deepdanbooru import get_deepdanbooru_tags
+from .deepgelbooru import get_deepgelbooru_tags
+from .format import tags_to_text, add_underline, remove_underline
+from .match import tag_match_suffix, tag_match_prefix, tag_match_full
+from .mldanbooru import get_mldanbooru_tags
+from .order import sort_tags
+from .overlap import drop_overlap_tags
+from .pixai import get_pixai_tags
+from .wd14 import get_wd14_tags, convert_wd14_emb_to_prediction, denormalize_wd14_emb
+
 
         ''')
     )
