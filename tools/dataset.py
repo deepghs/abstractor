@@ -41,8 +41,8 @@ def sync(repository: str, deploy_span: float = 5 * 60):
             filename='datasets.parquet'
         ))
         df_datasets = df_datasets[~df_datasets['repo_id'].isin(BLACKLISTED_DATASETS)]
-        # df_datasets = df_datasets[df_datasets['is_ready_to_view'].map(lambda x: x['yes'])]
-        # df_datasets = df_datasets[df_datasets['is_clear_enough'].map(lambda x: x['yes'])]
+        df_datasets = df_datasets[df_datasets['is_ready_to_view'].map(lambda x: x['yes'])]
+        df_datasets = df_datasets[df_datasets['is_clear_enough'].map(lambda x: x['yes'])]
         d_datasets = {item['repo_id']: item for item in df_datasets.to_dict('records')}
     else:
         d_datasets = {}
