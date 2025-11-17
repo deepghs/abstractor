@@ -10,3 +10,4 @@ openai
 di-toolkit
 fsspec
 aiohttp
+pyarrow
