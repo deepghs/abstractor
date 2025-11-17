@@ -44,8 +44,9 @@ def _get_sample_fn(filename):
     return None
 
 
-def _get_tree(repo_id: str, repo_type: RepoTypeTyping, dir_in_repo: str,
-              revision: Optional[str] = None, show_all: bool = False, hf_token: Optional[str] = None) -> TreeItem:
+def get_hf_repo_tree(repo_id: str, repo_type: RepoTypeTyping, dir_in_repo: str,
+                     revision: Optional[str] = None, show_all: bool = False,
+                     hf_token: Optional[str] = None) -> TreeItem:
     """
     Retrieve the tree structure of files in a HuggingFace repository.
 
@@ -308,9 +309,9 @@ def _tree_simple(tree: TreeItem, max_cnt: Optional[int] = 20):
     )
 
 
-def ask_llm_for_hf_repo_info(repo_id: str, repo_type: RepoTypeTyping = 'dataset', revision: str = 'main',
-                             hf_token: Optional[str] = None, max_retries: int = 5, max_sample_count: int = 15):
-    tree_root = _get_tree(
+def ask_llm_for_hf_repo_key_files(repo_id: str, repo_type: RepoTypeTyping = 'dataset', revision: str = 'main',
+                                  hf_token: Optional[str] = None, max_retries: int = 5, max_sample_count: int = 15):
+    tree_root = get_hf_repo_tree(
         repo_id=repo_id,
         repo_type=repo_type,
         revision=revision,
@@ -393,6 +394,41 @@ def ask_llm_for_hf_repo_info(repo_id: str, repo_type: RepoTypeTyping = 'dataset'
                 logging.exception(f'Error on parsing ({cnt}/{max_retries}) ...')
 
         logging.info(f'Expected filename: {expected_filenames!r}')
+        return expected_filenames
+
+
+def get_hf_repo_abstract_prompt(repo_id: str, repo_type: RepoTypeTyping = 'dataset', revision: str = 'main',
+                                hf_token: Optional[str] = None, max_retries: int = 15, max_sample_count: int = 15):
+    tree_root = get_hf_repo_tree(
+        repo_id=repo_id,
+        repo_type=repo_type,
+        revision=revision,
+        dir_in_repo='.',
+        hf_token=hf_token,
+    )
+
+    with io.StringIO() as sf:
+        print(f'Repo ID: {repo_id}', file=sf)
+        print(f'Repo Type: {repo_type}', file=sf)
+        print(f'', file=sf)
+        print(f'# Directory Tree', file=sf)
+        print(f'', file=sf)
+        print(f'This is the directory tree of this repository:', file=sf)
+        print(format_tree(
+            _tree_simple(tree_root),
+            format_node=TreeItem.get_name,
+            get_children=TreeItem.get_children,
+        ), file=sf)
+        print(f'', file=sf)
+
+        expected_filenames = ask_llm_for_hf_repo_key_files(
+            repo_id=repo_id,
+            repo_type=repo_type,
+            revision=revision,
+            hf_token=hf_token,
+            max_retries=max_retries,
+            max_sample_count=max_sample_count,
+        )
 
         print(f'# Sample Files', file=sf)
         print(f'', file=sf)
@@ -428,10 +464,11 @@ def ask_llm_for_hf_repo_info(repo_id: str, repo_type: RepoTypeTyping = 'dataset'
                 print(f'', file=sf)
 
         prompt = sf.getvalue()
+        return prompt
 
-        with open('test_mf.txt', 'w') as f:
-            print(prompt, file=f)
 
+def ask_llm_for_hf_repo_info(repo_id: str, repo_type: RepoTypeTyping = 'dataset', revision: str = 'main',
+                             hf_token: Optional[str] = None, max_retries: int = 5, max_sample_count: int = 15):
     _SYSTEM_PROMPT = textwrap.dedent(f"""
     You are an expert AI assistant specialized in analyzing Hugging Face repositories. Your task is to analyze repository information (including README files, data samples, and metadata) and extract structured information in JSON format.
 
@@ -541,7 +578,14 @@ def ask_llm_for_hf_repo_info(repo_id: str, repo_type: RepoTypeTyping = 'dataset'
                     },
                     {
                         "role": "user",
-                        "content": prompt,
+                        "content": get_hf_repo_abstract_prompt(
+                            repo_id=repo_id,
+                            repo_type=repo_type,
+                            revision=revision,
+                            hf_token=hf_token,
+                            max_retries=max_retries,
+                            max_sample_count=max_sample_count,
+                        ),
                     }
                 ],
                 # model_name='deepseek-reasoner',
