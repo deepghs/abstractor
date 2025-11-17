@@ -324,10 +324,9 @@ Before output, verify:
 if __name__ == '__main__':
     logging.try_init_root(level=logging.INFO)
     sync(
-        repo_id='deepghs/anime_blurry_preparation',
+        repo_id='deepghs/tagger_vocabs',
         repo_type='dataset',
         extra_text=('''
-binary classification dataset (clear-blurry) for 3d images,
-auto-annotated by blip, just for testing, not recommended for production model training 
+vocabs data for tagger models, maybe useful for some basic NLP calculation.
         ''')
     )
