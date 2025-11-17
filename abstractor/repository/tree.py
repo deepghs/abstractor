@@ -476,7 +476,7 @@ def ask_llm_for_hf_repo_info(repo_id: str, repo_type: RepoTypeTyping = 'dataset'
 
     **modality**: Identify all data modalities involved. Options include: Text, Image, Audio, Video, Tabular, Time Series, Graph, 3D, Multi-Modal, and others as appropriate.
 
-    **abstract**: Write a comprehensive 135-180 word summary following academic paper abstract conventions but adapted for open-source repositories:
+    **abstract**: Write a comprehensive 150-200 word summary following academic paper abstract conventions but adapted for open-source repositories:
 
     - **For model repositories**:
       - Start with the problem statement and motivation
@@ -504,7 +504,7 @@ def ask_llm_for_hf_repo_info(repo_id: str, repo_type: RepoTypeTyping = 'dataset'
 
     **bio**: Write ONE clear sentence that describes what this repository is used for.
 
-    **keywords**: Provide 3-5 relevant keywords that complement the abstract and help categorize the repository. All keywords should be capitalized and titleized, like 'WebDataset', 'Image Classification'.
+    **keywords**: Provide 3-5 relevant keywords that complement the abstract and help categorize the repository, should be matched with abstract part. All keywords should be capitalized and titleized, like 'WebDataset', 'Image Classification'.
 
     **is_ready_to_view**: Set to `true` if the repository has a comprehensive README that clearly guides users on how to use it. Set to `false` if the README is missing, incomplete, or unclear.
 
@@ -535,7 +535,8 @@ def ask_llm_for_hf_repo_info(repo_id: str, repo_type: RepoTypeTyping = 'dataset'
                         "content": prompt,
                     }
                 ],
-                model_name='deepseek-reasoner',
+                # model_name='deepseek-reasoner',
+                model_name='deepseek-chat',
             )
             return {
                 **parse_json_from_llm_output(text),
