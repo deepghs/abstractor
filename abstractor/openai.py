@@ -42,7 +42,7 @@ def _prompt_wrap(prompts: Union[str, List[dict]]) -> List[dict]:
 
 
 def ask_llm(prompts: Union[str, List[dict]], model_name: Optional[str] = None,
-            max_tokens: int = 130000):
+            max_tokens: int = 120000):
     model_name = model_name or os.environ.get('OPENAI_MODEL_NAME') or 'deepseek-reasoner'
     logging.info(f'Asking model {model_name!r} ...')
     response = get_client().chat.completions.create(
