@@ -438,15 +438,22 @@ def get_hf_repo_abstract_prompt(repo_id: str, repo_type: RepoTypeTyping = 'datas
         for fn in expected_filenames:
             if fn.lower().endswith('.md') or fn.lower().endswith('.py'):
                 logging.info(f'Loading text file {fn!r} ...')
+                try:
+                    _sfn_text = pathlib.Path(hf_hub_download(
+                        repo_id=repo_id,
+                        repo_type=repo_type,
+                        filename=fn, revision=revision,
+                        token=hf_token,
+                    )).read_text()
+                except:
+                    logging.exception(f'Sample skipped for file {fn!r}...')
+                    continue
+
                 print(f'## {fn}', file=sf)
                 print(f'', file=sf)
-                print(pathlib.Path(hf_hub_download(
-                    repo_id=repo_id,
-                    repo_type=repo_type,
-                    filename=fn, revision=revision,
-                    token=hf_token,
-                )).read_text(), file=sf)
+                print(_sfn_text, file=sf)
                 print(f'', file=sf)
+
             else:
                 _sfn = _get_sample_fn(fn)
                 if _sfn is None:
