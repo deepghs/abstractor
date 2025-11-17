@@ -1,7 +1,10 @@
+import os
 import textwrap
 from typing import Optional
 
 from ditk import logging
+from hbutils.system import TemporaryDirectory
+from hfutils.operate import upload_directory_as_directory
 from hfutils.operate.base import RepoTypeTyping
 
 from abstractor.openai import ask_llm
@@ -261,6 +264,7 @@ Before output, verify:
     """).strip()
 
     cnt = 0
+    text = None
     while cnt < max_retries:
         try:
             text = ask_llm(
@@ -292,6 +296,19 @@ Before output, verify:
             logging.exception(f'Error on parsing ({cnt}/{max_retries}) ...')
         else:
             break
+
+    if text:
+        with TemporaryDirectory() as upload_dir:
+            with open(os.path.join(upload_dir, 'README.md'), 'w') as f:
+                print(text, file=f)
+
+            upload_directory_as_directory(
+                repo_id=repo_id,
+                repo_type=repo_type,
+                local_directory=upload_dir,
+                path_in_repo='.',
+                message=f'Auto-update README.md via abstractor',
+            )
 
 
 if __name__ == '__main__':
