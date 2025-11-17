@@ -69,12 +69,6 @@ license: (REQUIRED)
 # Recommended fields
 size_categories: 
   - Options: n<1K, 1K<n<10K, 10K<n<100K, 100K<n<1M, 1M<n<10M, n>10M
-annotations_creators: 
-  - Options: crowdsourced, expert-generated, machine-generated, found
-language_creators: 
-  - Options: same as annotations_creators
-multilinguality: 
-  - Options: monolingual, multilingual
 source_datasets: 
   - Format: [original, extended|username/dataset]
 
