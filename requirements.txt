@@ -11,3 +11,4 @@ di-toolkit
 fsspec
 aiohttp
 pyarrow
+tiktoken

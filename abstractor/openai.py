@@ -5,6 +5,8 @@ from typing import List, Optional, Union
 
 from openai import OpenAI
 
+from .utils import truncated_prompts_by_token
+
 
 @lru_cache()
 def get_client() -> OpenAI:
@@ -39,12 +41,13 @@ def _prompt_wrap(prompts: Union[str, List[dict]]) -> List[dict]:
         return prompts
 
 
-def ask_llm(prompts: Union[str, List[dict]], model_name: Optional[str] = None):
+def ask_llm(prompts: Union[str, List[dict]], model_name: Optional[str] = None,
+            max_tokens: int = 130000):
     model_name = model_name or os.environ.get('OPENAI_MODEL_NAME') or 'deepseek-reasoner'
     logging.info(f'Asking model {model_name!r} ...')
     response = get_client().chat.completions.create(
         model=model_name,
-        messages=_prompt_wrap(prompts),
+        messages=truncated_prompts_by_token(_prompt_wrap(prompts), max_tokens=max_tokens),
     )
 
     response_text = response.choices[0].message.content
