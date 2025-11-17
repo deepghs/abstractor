@@ -548,7 +548,7 @@ def ask_llm_for_hf_repo_info(repo_id: str, repo_type: RepoTypeTyping = 'dataset'
                 **parse_json_from_llm_output(text),
                 "repo_id": repo_id,
                 "repo_type": repo_type,
-                "downloads": repo_info.downloads_all_time,
+                "downloads": repo_info.downloads,
                 "likes": repo_info.likes,
                 "created_at": time.time(),
             }
