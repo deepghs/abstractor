@@ -85,12 +85,16 @@ def sync(repository: str, deploy_span: float = 5 * 60):
             continue
 
         logging.info(f'Repository: {repo_id!r}, repo_type: {"model"!r} ...')
-        d_models[repo_id] = ask_llm_for_hf_repo_info(
-            repo_id=repo_id,
-            repo_type='model',
-        )
-        has_update = True
-        _deploy(force=False)
+        try:
+            d_models[repo_id] = ask_llm_for_hf_repo_info(
+                repo_id=repo_id,
+                repo_type='model',
+            )
+            has_update = True
+            _deploy(force=False)
+        except:
+            logging.exception(f'Skipped due to error - {repo_id!r}.')
+            continue
 
     _deploy(force=True)
 
