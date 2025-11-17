@@ -229,6 +229,8 @@ This revised approach ensures proper attribution while providing rich, reusable 
 
 5. The provided source code in extra content part may contain rst format docs, if you use those content you should make sure all the content is transformed to markdown fomat. e.g. `xxx <yyy>`_ to [xxxx](yyyy), etc.
 
+6. For dataset repositories, unless there is very explicit clues of some library supported (e.g. cheesechaser, dghs-imgutils or huggingface datasets, etc), you do not have to provide example code of using it.
+
 #### 6. Special Case Handling
 - **No original README**:
   - Generate comprehensive summary from file structure and data samples
@@ -308,7 +310,7 @@ Before output, verify:
 if __name__ == '__main__':
     logging.try_init_root(level=logging.INFO)
     sync(
-        repo_id='deepghs/game_character_skins',
+        repo_id='deepghs/site_tags',
         repo_type='dataset',
         extra_text=('''
 
