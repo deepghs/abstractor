@@ -328,5 +328,6 @@ if __name__ == '__main__':
         repo_type='dataset',
         extra_text=('''
 ultralytics-compatible dataset for anime character halfbody bboxes
+raw means original dataset without data augmentation
         ''')
     )
