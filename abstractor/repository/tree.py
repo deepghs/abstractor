@@ -525,6 +525,9 @@ def ask_llm_for_hf_repo_info(repo_id: str, repo_type: RepoTypeTyping = 'dataset'
     repo_info = client.repo_info(
         repo_id=repo_id,
         repo_type=repo_type,
+        expand=['author', 'cardData', 'citation', 'createdAt', 'disabled', 'description', 'downloads',
+                'downloadsAllTime', 'gated', 'lastModified', 'likes', 'paperswithcode_id', 'private', 'sha', 'tags',
+                'trendingScore', 'resourceGroup', 'xetEnabled', 'usedStorage'],
     )
 
     cnt = 0
@@ -548,7 +551,7 @@ def ask_llm_for_hf_repo_info(repo_id: str, repo_type: RepoTypeTyping = 'dataset'
                 **parse_json_from_llm_output(text),
                 "repo_id": repo_id,
                 "repo_type": repo_type,
-                "downloads": repo_info.downloads,
+                "downloads": repo_info.downloads_all_time,
                 "likes": repo_info.likes,
                 "created_at": time.time(),
             }
