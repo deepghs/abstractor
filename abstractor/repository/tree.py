@@ -374,7 +374,7 @@ def ask_llm_for_hf_repo_key_files(repo_id: str, repo_type: RepoTypeTyping = 'dat
         print(f'', file=sf)
 
         cnt = 0
-        while cnt < max_retries:
+        while True:
             try:
                 expected_filenames = parse_json_from_llm_output(ask_llm([
                     {
@@ -568,7 +568,7 @@ def ask_llm_for_hf_repo_info(repo_id: str, repo_type: RepoTypeTyping = 'dataset'
     )
 
     cnt = 0
-    while cnt < max_retries:
+    while True:
         try:
             text = ask_llm(
                 prompts=[
