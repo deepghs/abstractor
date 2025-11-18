@@ -11,6 +11,7 @@ from tqdm import tqdm
 from abstractor.repository import ask_llm_for_hf_repo_info
 
 BLACKLISTED_SPACES = [
+    'deepghs/README',
 ]
 
 
