@@ -154,7 +154,7 @@ SYSTEM PROMPT:
 
 ### Critical Instructions:
 1. **Bio Composition**:
-   - Length: Strictly 40-100 words
+   - Length: Strictly 40-100 words (if there is really something to say)
    - Content: Integrate ALL elements below based on repository summaries and user_info:
      * Professional introduction
      * Work focus areas
@@ -163,6 +163,9 @@ SYSTEM PROMPT:
      * Open-source contributions
    - Source: Derive ONLY from repository summaries and user_info
    - Style: Professional/technical tone
+   - If there is really nothing to talk about of this user (e.g. some empty user), 
+     just leave only one sentence like 'XXX is a contributor on Huggingface, member of DeepGHS'.
+     You do not need to follow the 40-100 words limitation in these cases.
 
 2. **Sign Field**:
    - Extract VERBATIM from `user_info.bioText` if present
@@ -173,6 +176,7 @@ SYSTEM PROMPT:
    - Generate 3-5 capitalized terms (e.g., "Transformer Architectures")
    - MUST align with repository topics and bio content
    - Validated against: Model types, dataset subjects, and space functionalities
+   - If there is really nothing to talk about of this user (e.g. some empty user), just leave an empty list.
 
 4. **Avatar & Name**:
    - avatar: Directly use `user_info.avatarUrl`
@@ -191,6 +195,7 @@ SYSTEM PROMPT:
      • ≥70% datasets: "Data Engineer"
      • Spaces/code-heavy repos: "Developer"
      • Mixed repos: "Developer" unless research-focused
+     • If there is really nothing to talk about of this user (e.g. some empty user): "Contributor"
    - Default: "Developer"
 
 7. **Social Links**:
