@@ -228,14 +228,14 @@ SYSTEM PROMPT:
 
     with io.StringIO() as sf:
         print(f'Huggingface User: {author}', file=sf)
-        user_info = hf_client.get_user_overview(username=author)
-        print(f'Username: {user_info.username!r}', file=sf)
-        print(f'Full Name: {user_info.fullname!r}', file=sf)
+        user_api_info = hf_client.get_user_overview(username=author)
+        print(f'Username: {user_api_info.username!r}', file=sf)
+        print(f'Full Name: {user_api_info.fullname!r}', file=sf)
         print(f'Noticed Orgs: {org_names!r}', file=sf)
 
-        if user_info.details:
-            print(f'User details: {user_info.details!r}', file=sf)
-        print(f'Profile from API: {user_info!r}', file=sf)
+        if user_api_info.details:
+            print(f'User details: {user_api_info.details!r}', file=sf)
+        print(f'Profile from API: {user_api_info!r}', file=sf)
         print(f'', file=sf)
         print(f'Noticed models: {models!r}', file=sf)
         print(f'Noticed datasets: {datasets!r}', file=sf)
@@ -315,5 +315,16 @@ SYSTEM PROMPT:
             else:
                 break
 
+        user_info = {
+            **user_info,
+            'username': user_api_info.username,
+            'fullname': user_api_info.fullname,
+            'num_following': user_api_info.num_following,
+            'num_followers': user_api_info.num_followers,
+            'num_datasets': user_api_info.num_datasets,
+            'num_models': user_api_info.num_models,
+            'num_spaces': user_api_info.num_spaces,
+            'num_papers': user_api_info.num_papers,
+        }
         logging.info(f'Expected filename: {user_info!r}')
         return user_info
