@@ -5,6 +5,7 @@ from pprint import pformat
 from typing import List, Optional
 
 from hfutils.operate import get_hf_client
+from tqdm import tqdm
 
 from abstractor.openai import ask_llm
 from abstractor.utils import parse_json_from_llm_output
@@ -245,41 +246,53 @@ SYSTEM PROMPT:
         if picked.get('models'):
             print(f'# Models', file=sf)
             print(f'', file=sf)
-            for repo_id in picked['models']:
-                print(f'## {repo_id}', file=sf)
-                print(f'', file=sf)
-                print(pformat(ask_llm_for_hf_repo_info(
-                    repo_id=repo_id,
-                    repo_type='model',
-                    hf_token=hf_token,
-                )), file=sf)
-                print(f'', file=sf)
+            for repo_id in tqdm(picked['models'], desc=f'Models of {author}'):
+                if hf_client.repo_exists(
+                        repo_id=repo_id,
+                        repo_type='model',
+                ):
+                    print(f'## {repo_id}', file=sf)
+                    print(f'', file=sf)
+                    print(pformat(ask_llm_for_hf_repo_info(
+                        repo_id=repo_id,
+                        repo_type='model',
+                        hf_token=hf_token,
+                    )), file=sf)
+                    print(f'', file=sf)
 
         if picked.get('datasets'):
             print(f'# Datasets', file=sf)
             print(f'', file=sf)
-            for repo_id in picked['datasets']:
-                print(f'## {repo_id}', file=sf)
-                print(f'', file=sf)
-                print(pformat(ask_llm_for_hf_repo_info(
-                    repo_id=repo_id,
-                    repo_type='dataset',
-                    hf_token=hf_token,
-                )), file=sf)
-                print(f'', file=sf)
+            for repo_id in tqdm(picked['datasets'], desc=f'Dataset of {author}'):
+                if hf_client.repo_exists(
+                        repo_id=repo_id,
+                        repo_type='dataset',
+                ):
+                    print(f'## {repo_id}', file=sf)
+                    print(f'', file=sf)
+                    print(pformat(ask_llm_for_hf_repo_info(
+                        repo_id=repo_id,
+                        repo_type='dataset',
+                        hf_token=hf_token,
+                    )), file=sf)
+                    print(f'', file=sf)
 
         if picked.get('spaces'):
             print(f'# Spaces', file=sf)
             print(f'', file=sf)
-            for repo_id in picked['spaces']:
-                print(f'## {repo_id}', file=sf)
-                print(f'', file=sf)
-                print(pformat(ask_llm_for_hf_repo_info(
-                    repo_id=repo_id,
-                    repo_type='space',
-                    hf_token=hf_token,
-                )), file=sf)
-                print(f'', file=sf)
+            for repo_id in tqdm(picked['spaces'], desc=f'Spaces of {author}'):
+                if hf_client.repo_exists(
+                        repo_id=repo_id,
+                        repo_type='space',
+                ):
+                    print(f'## {repo_id}', file=sf)
+                    print(f'', file=sf)
+                    print(pformat(ask_llm_for_hf_repo_info(
+                        repo_id=repo_id,
+                        repo_type='space',
+                        hf_token=hf_token,
+                    )), file=sf)
+                    print(f'', file=sf)
 
         cnt = 0
         while True:
