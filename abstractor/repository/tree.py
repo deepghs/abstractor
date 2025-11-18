@@ -334,7 +334,7 @@ def ask_llm_for_hf_repo_key_files(repo_id: str, repo_type: RepoTypeTyping = 'dat
 
     **CONSTRAINTS:**
     - Maximum {max_sample_count} files total
-    - Only select files with these extensions: .md, .py, .parquet, .csv, .tsv, .json, .jsonl, .tar
+    - Only select files with these extensions: .md, .py, .txt, .parquet, .csv, .tsv, .json, .jsonl, .tar
     - Files must be downloadable via hf_hub_download (use exact repository paths)
     - Avoid redundant content - if files appear to contain similar information based on naming patterns, sample only representative examples
     - Prioritize smaller, more informative files over large data archives when possible
@@ -437,7 +437,7 @@ def get_hf_repo_abstract_prompt(repo_id: str, repo_type: RepoTypeTyping = 'datas
         print(f'', file=sf)
 
         for fn in expected_filenames:
-            if fn.lower().endswith('.md') or fn.lower().endswith('.py'):
+            if fn.lower().endswith('.md') or fn.lower().endswith('.py') or fn.lower().endswith('.txt'):
                 logging.info(f'Loading text file {fn!r} ...')
                 try:
                     _sfn_text = pathlib.Path(hf_hub_download(
