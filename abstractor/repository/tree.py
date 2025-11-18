@@ -578,7 +578,9 @@ def ask_llm_for_hf_repo_info(repo_id: str, repo_type: RepoTypeTyping = 'dataset'
         repo_type=repo_type,
         expand=['author', 'cardData', 'createdAt', 'disabled', 'downloads',
                 'downloadsAllTime', 'gated', 'lastModified', 'likes', 'private', 'tags',
-                'trendingScore', 'xetEnabled', 'usedStorage'],
+                'trendingScore', 'xetEnabled', 'usedStorage'] if repo_type != 'space' else
+        ['author', 'cardData', 'createdAt', 'disabled', 'lastModified', 'likes', 'private', 'tags',
+         'trendingScore', 'xetEnabled', 'usedStorage'],
     )
 
     cnt = 0
