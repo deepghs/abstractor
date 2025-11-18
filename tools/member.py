@@ -27,22 +27,22 @@ def sync(repository: str, deploy_span: float = 5 * 60):
     if hf_client.file_exists(
             repo_id=repository,
             repo_type='dataset',
-            filename='users.parquet'
+            filename='members.parquet'
     ):
-        df_users = pd.read_parquet(hf_client.hf_hub_download(
+        df_members = pd.read_parquet(hf_client.hf_hub_download(
             repo_id=repository,
             repo_type='dataset',
-            filename='users.parquet'
+            filename='members.parquet'
         ))
-        d_users = {item['username']: item for item in df_users.to_dict('records')}
+        d_members = {item['username']: item for item in df_members.to_dict('records')}
     else:
-        d_users = {}
+        d_members = {}
 
     _last_update, has_update = None, False
-    _last_user_count = len(d_users)
+    _last_member_count = len(d_members)
 
     def _deploy(force=False):
-        nonlocal _last_update, has_update, _last_user_count
+        nonlocal _last_update, has_update, _last_member_count
 
         if not has_update:
             return
@@ -50,30 +50,30 @@ def sync(repository: str, deploy_span: float = 5 * 60):
             return
 
         with TemporaryDirectory() as td:
-            df_users = pd.DataFrame(list(d_users.values()))
-            df_users = df_users.sort_values(by=['num_followers', 'username'], ascending=[False, True])
-            users_parquet_file = os.path.join(td, 'users.parquet')
-            df_users.to_parquet(users_parquet_file, index=False)
+            df_members = pd.DataFrame(list(d_members.values()))
+            df_members = df_members.sort_values(by=['num_followers', 'username'], ascending=[False, True])
+            members_parquet_file = os.path.join(td, 'members.parquet')
+            df_members.to_parquet(members_parquet_file, index=False)
 
             upload_directory_as_directory(
                 repo_id=repository,
                 repo_type='dataset',
                 local_directory=td,
                 path_in_repo='.',
-                message=f'Add {plural_word(len(d_users) - _last_user_count, "user")}',
+                message=f'Add {plural_word(len(d_members) - _last_member_count, "member")}',
             )
             has_update = False
             _last_update = time.time()
-            _last_user_count = len(d_users)
+            _last_member_count = len(d_members)
 
     for member_item in hf_client.list_organization_members(organization='deepghs'):
         username = member_item.username
-        if username in d_users:
+        if username in d_members:
             continue
 
         logging.info(f'Username: {username!r} ...')
         try:
-            d_users[username] = create_user_info(
+            d_members[username] = create_user_info(
                 author=username,
             )
             has_update = True
