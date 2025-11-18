@@ -29,6 +29,8 @@ def sync(repository: str, deploy_span: float = 5 * 60):
             os.linesep.join(attr_lines),
         )
 
+    _last_update, has_update = None, False
+
     if hf_client.file_exists(
             repo_id=repository,
             repo_type='dataset',
@@ -39,14 +41,16 @@ def sync(repository: str, deploy_span: float = 5 * 60):
             repo_type='dataset',
             filename='spaces.parquet'
         ))
+        origin_length = len(df_spaces)
         df_spaces = df_spaces[~df_spaces['repo_id'].isin(BLACKLISTED_SPACES)]
         # df_spaces = df_spaces[df_spaces['is_ready_to_view'].map(lambda x: x['yes'])]
         # df_spaces = df_spaces[df_spaces['is_clear_enough'].map(lambda x: x['yes'])]
         d_spaces = {item['repo_id']: item for item in df_spaces.to_dict('records')}
+        if origin_length != len(d_spaces):
+            has_update = True
     else:
         d_spaces = {}
 
-    _last_update, has_update = None, False
     _last_space_count = len(d_spaces)
 
     def _deploy(force=False):
