@@ -21,6 +21,7 @@ from .json import sample_from_json
 from .jsonl import sample_from_jsonl
 from .parquet import sample_from_parquet
 from .tar import sample_from_tar
+from .text import sample_text
 from ..openai import ask_llm
 from ..utils import parse_json_from_llm_output
 
@@ -440,12 +441,12 @@ def get_hf_repo_abstract_prompt(repo_id: str, repo_type: RepoTypeTyping = 'datas
             if fn.lower().endswith('.md') or fn.lower().endswith('.py') or fn.lower().endswith('.txt'):
                 logging.info(f'Loading text file {fn!r} ...')
                 try:
-                    _sfn_text = pathlib.Path(hf_hub_download(
+                    _sfn_text = sample_text(pathlib.Path(hf_hub_download(
                         repo_id=repo_id,
                         repo_type=repo_type,
                         filename=fn, revision=revision,
                         token=hf_token,
-                    )).read_text()
+                    )).read_text())
                 except:
                     logging.exception(f'Sample skipped for file {fn!r}...')
                     continue
