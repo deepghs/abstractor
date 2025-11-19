@@ -1227,3 +1227,4 @@ fabric.properties
 !/abstractor/utils/irregular_repo.json
 /venv*
 /.env*
+/pages
