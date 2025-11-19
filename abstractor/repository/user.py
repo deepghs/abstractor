@@ -256,6 +256,7 @@ SYSTEM PROMPT:
                         repo_id=repo_id,
                         repo_type='model',
                 ):
+                    logging.info(f'Scanning repository {repo_id!r}, repo_type: model ...')
                     print(f'## {repo_id}', file=sf)
                     print(f'', file=sf)
                     print(pformat(ask_llm_for_hf_repo_info(
@@ -273,6 +274,7 @@ SYSTEM PROMPT:
                         repo_id=repo_id,
                         repo_type='dataset',
                 ):
+                    logging.info(f'Scanning repository {repo_id!r}, repo_type: dataset ...')
                     print(f'## {repo_id}', file=sf)
                     print(f'', file=sf)
                     print(pformat(ask_llm_for_hf_repo_info(
@@ -290,6 +292,7 @@ SYSTEM PROMPT:
                         repo_id=repo_id,
                         repo_type='space',
                 ):
+                    logging.info(f'Scanning repository {repo_id!r}, repo_type: space ...')
                     print(f'## {repo_id}', file=sf)
                     print(f'', file=sf)
                     print(pformat(ask_llm_for_hf_repo_info(
