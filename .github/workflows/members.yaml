@@ -1,0 +1,71 @@
+name: Sync Members
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *'
+
+jobs:
+  update-badges:
+    name: Sync Members
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version:
+          - '3.10'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3.3.0
+        with:
+          fetch-depth: 20
+          submodules: 'recursive'
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Download cloc
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y tree cloc wget curl make zip
+          sudo apt-get install -y git-lfs
+      - name: Install dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install --upgrade flake8 setuptools wheel twine
+          pip install -r requirements.txt
+      - name: Test the basic environment
+        shell: bash
+        run: |
+          python -V
+          pip --version
+          pip list
+          tree .
+      - name: Prepare for the dataset
+        shell: bash
+        env:
+          CI: 'true'
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          GH_ACCESS_TOKEN: ${{ secrets.GH_ACCESS_TOKEN }}
+        run: |
+          make ds_clone ds_pull
+      - name: Run data export
+        env:
+          CI: 'true'
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          DS_REPO_ID: ${{ secrets.DS_REPO_ID }}
+          GH_ACCESS_TOKEN: ${{ secrets.GH_ACCESS_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_SITE: ${{ secrets.OPENAI_SITE }}
+          OPENAI_MODEL_NAME: ${{ secrets.OPENAI_MODEL_NAME }}
+        shell: bash
+        run: |
+          python -m tools.member_arr
+      - name: Push for the dataset
+        shell: bash
+        env:
+          CI: 'true'
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          GH_ACCESS_TOKEN: ${{ secrets.GH_ACCESS_TOKEN }}
+        run: |
+          make ds_save ds_push
